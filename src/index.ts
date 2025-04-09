@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { Dates, Types } from 'cafe-utility'
 import { EnvironmentVariables, getAppConfig, getServerConfig, getStampConfig } from './config'
 import { logger, subscribeLogServerRequests } from './logger'
 import { createApp } from './server'
@@ -31,6 +32,14 @@ async function main() {
     process.on('unhandledRejection', err => {
         logger.error('Unhandled Rejection:', err)
     })
+
+    if (process.env.TEMPORARY) {
+        const seconds = Types.asNumber(process.env.TEMPORARY, { name: 'TEMPORARY' })
+        logger.info(`temporary mode, shutting down in ${seconds} seconds`)
+        setTimeout(() => {
+            process.exit(0)
+        }, Dates.seconds(seconds))
+    }
 }
 
 main()

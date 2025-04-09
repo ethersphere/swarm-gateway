@@ -1,5 +1,15 @@
 # Swarm Gateway
 
+## Example usage
+
+```sh
+HOSTNAME=bzz.limo POSTAGE_AMOUNT=800000000 POSTAGE_DEPTH=17 node dist
+time="2025-04-08T11:52:52.687Z" level="info" msg="log level=info"
+time="2025-04-08T11:52:52.911Z" level="info" msg="enabled stamp manager with autobuy"
+time="2025-04-08T11:52:52.914Z" level="info" msg="resolving .eth names and CIDs at *.bzz.limo"
+time="2025-04-08T11:52:52.921Z" level="info" msg="starting server at bzz.limo:3000"
+```
+
 ## Environment variables
 
 ### Database
