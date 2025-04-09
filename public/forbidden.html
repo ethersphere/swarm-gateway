@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <link rel="icon" href="/favicon.ico" />
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <meta name="theme-color" content="#f9f9f9" />
+        <title>Request Approval</title>
+        <link rel="stylesheet" href="/app.css" />
+    </head>
+    <body>
+        <video autoplay muted>
+            <source src="/background.mp4" type="video/mp4" />
+        </video>
+        <img class="logo" src="/logo.svg" />
+        <div class="card">
+            <section>
+                <h1 class="welcome">Request Approval for This Hash</h1>
+                <p class="explanation">
+                    This hash is not yet approved for retrieval. Please complete the approval request form below, or
+                    <a href="https://docs.ethswarm.org/docs/bee/installation/quick-start/" target="_blank"
+                        >run your own Bee node</a
+                    >
+                    for unrestricted access. Hashes registered with ENS can always be accessed via
+                    <code>bzz.link</code> subdomains, for example: <code>myensname.bzz.link</code>.
+                </p>
+            </section>
+            <section class="gap-20">
+                <div class="input">
+                    <label>Reference</label>
+                    <input type="text" id="hash" placeholder="Enter the hash to be approved" />
+                </div>
+                <div class="input">
+                    <label>ENS (optional)</label>
+                    <input type="text" id="ens" placeholder="Enter ENS (optional)" />
+                </div>
+                <button id="submit">Submit</button>
+            </section>
+        </div>
+        <footer>
+            <hr class="separator" />
+            <ul class="links">
+                <li><a class="link" href="https://ethswarm.org/">Swarm Website</a></li>
+                <li><a class="link" href="https://ethswarm.org/faq">FAQ</a></li>
+                <li><a class="link" href="https://discord.gg/wdghaQsGq5">Discord</a></li>
+                <li><a class="link" href="https://github.com/ethersphere">Github</a></li>
+            </ul>
+        </footer>
+        <script src="/snackbar.js"></script>
+        <script>
+            if (window.location.search && window.location.search) {
+                let hash = window.location.search.split('=')[1]
+                if (hash.startsWith('0x')) {
+                    hash = hash.slice(2)
+                }
+                if (hash.toLowerCase().match(/^[0-9a-f]{64}$/)) {
+                    document.getElementById('hash').value = hash
+                }
+            }
+            document.getElementById('submit').addEventListener('click', async () => {
+                let hash = document.getElementById('hash').value
+                if (!hash) {
+                    snackbar('Please enter a hash to be approved.', 'error')
+                    return
+                }
+                if (hash.startsWith('0x')) {
+                    hash = hash.slice(2)
+                }
+                if (!hash.toLowerCase().match(/^[0-9a-f]{64}$/)) {
+                    snackbar('Invalid hash format. Please enter a valid hash.', 'error')
+                    return
+                }
+                const ens = document.getElementById('ens').value || null
+                try {
+                    const response = await fetch('/moderation/approval', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ hash, ens })
+                    })
+                    if (response.status === 200) {
+                        snackbar('Request submitted successfully!', 'success')
+                        document.getElementById('hash').value = ''
+                        document.getElementById('ens').value = ''
+                    } else {
+                        snackbar('Failed to submit request. Please try again.', 'error')
+                    }
+                } catch (error) {
+                    console.error('Error submitting request:', error)
+                    snackbar('An error occurred. Please try again.', 'error')
+                }
+            })
+        </script>
+    </body>
+</html>

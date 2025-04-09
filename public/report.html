@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <link rel="icon" href="/favicon.ico" />
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <meta name="theme-color" content="#f9f9f9" />
+        <title>Report Content</title>
+        <link rel="stylesheet" href="/app.css" />
+    </head>
+    <body>
+        <video autoplay muted>
+            <source src="/background.mp4" type="video/mp4" />
+        </video>
+        <img class="logo" src="/logo.svg" />
+        <div class="card">
+            <section>
+                <h1 class="welcome">Report Content</h1>
+                <p class="explanation">
+                    If you believe any content is inappropriate or violates our policies, please report it using the
+                    form below. Your report will be reviewed by our moderation team.
+                </p>
+            </section>
+
+            <section class="gap-20">
+                <div class="input">
+                    <label>Reference</label>
+                    <input type="text" id="hash" placeholder="Enter the hash of the content" />
+                </div>
+                <div class="input">
+                    <label>Reason</label>
+                    <textarea id="reason" rows="3" placeholder="Enter a reason for the report"></textarea>
+                </div>
+                <button id="submit">Submit</button>
+            </section>
+        </div>
+        <footer>
+            <hr class="separator" />
+            <ul class="links">
+                <li><a class="link" href="https://ethswarm.org/">Swarm Website</a></li>
+                <li><a class="link" href="https://ethswarm.org/faq">FAQ</a></li>
+                <li><a class="link" href="https://discord.gg/wdghaQsGq5">Discord</a></li>
+                <li><a class="link" href="https://github.com/ethersphere">Github</a></li>
+            </ul>
+        </footer>
+        <script src="/snackbar.js"></script>
+        <script>
+            document.getElementById('submit').addEventListener('click', async () => {
+                let hash = document.getElementById('hash').value
+                if (!hash) {
+                    snackbar('Please enter a hash to report.', 'error')
+                    return
+                }
+                const reason = document.getElementById('reason').value || null
+                try {
+                    const response = await fetch('/moderation/report', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ hash, reason })
+                    })
+                    if (response.status === 200) {
+                        snackbar('Report submitted successfully!', 'success')
+                        document.getElementById('hash').value = ''
+                        document.getElementById('reason').value = ''
+                    } else {
+                        snackbar('Failed to submit report. Please try again.', 'error')
+                    }
+                } catch (error) {
+                    console.error('Error submitting report:', error)
+                    snackbar('An error occurred. Please try again.', 'error')
+                }
+            })
+        </script>
+    </body>
+</html>
