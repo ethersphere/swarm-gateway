@@ -105,7 +105,7 @@ export async function getAllowedUserAgentsRows(
     options?: SelectOptions<AllowedUserAgentsRow>
 ): Promise<AllowedUserAgentsRow[]> {
     const [query, values] = buildSelect(filter, options)
-    return getRows('SELECT * FROM proxy.allowedUserAgents' + query, ...values) as unknown as AllowedUserAgentsRow[]
+    return getRows('SELECT * FROM allowedUserAgents' + query, ...values) as unknown as AllowedUserAgentsRow[]
 }
 
 export async function getOnlyAllowedUserAgentsRowOrNull(
@@ -114,7 +114,7 @@ export async function getOnlyAllowedUserAgentsRowOrNull(
 ): Promise<AllowedUserAgentsRow | null> {
     const [query, values] = buildSelect(filter, options)
     return getOnlyRowOrNull(
-        'SELECT * FROM proxy.allowedUserAgents' + query,
+        'SELECT * FROM allowedUserAgents' + query,
         ...values
     ) as unknown as AllowedUserAgentsRow | null
 }
@@ -124,10 +124,7 @@ export async function getOnlyAllowedUserAgentsRowOrThrow(
     options?: SelectOptions<AllowedUserAgentsRow>
 ): Promise<AllowedUserAgentsRow> {
     const [query, values] = buildSelect(filter, options)
-    return getOnlyRowOrThrow(
-        'SELECT * FROM proxy.allowedUserAgents' + query,
-        ...values
-    ) as unknown as AllowedUserAgentsRow
+    return getOnlyRowOrThrow('SELECT * FROM allowedUserAgents' + query, ...values) as unknown as AllowedUserAgentsRow
 }
 
 export async function getApprovalRequestsRows(
@@ -135,7 +132,7 @@ export async function getApprovalRequestsRows(
     options?: SelectOptions<ApprovalRequestsRow>
 ): Promise<ApprovalRequestsRow[]> {
     const [query, values] = buildSelect(filter, options)
-    return getRows('SELECT * FROM proxy.approvalRequests' + query, ...values) as unknown as ApprovalRequestsRow[]
+    return getRows('SELECT * FROM approvalRequests' + query, ...values) as unknown as ApprovalRequestsRow[]
 }
 
 export async function getOnlyApprovalRequestsRowOrNull(
@@ -144,7 +141,7 @@ export async function getOnlyApprovalRequestsRowOrNull(
 ): Promise<ApprovalRequestsRow | null> {
     const [query, values] = buildSelect(filter, options)
     return getOnlyRowOrNull(
-        'SELECT * FROM proxy.approvalRequests' + query,
+        'SELECT * FROM approvalRequests' + query,
         ...values
     ) as unknown as ApprovalRequestsRow | null
 }
@@ -154,10 +151,7 @@ export async function getOnlyApprovalRequestsRowOrThrow(
     options?: SelectOptions<ApprovalRequestsRow>
 ): Promise<ApprovalRequestsRow> {
     const [query, values] = buildSelect(filter, options)
-    return getOnlyRowOrThrow(
-        'SELECT * FROM proxy.approvalRequests' + query,
-        ...values
-    ) as unknown as ApprovalRequestsRow
+    return getOnlyRowOrThrow('SELECT * FROM approvalRequests' + query, ...values) as unknown as ApprovalRequestsRow
 }
 
 export async function getReportsRows(
@@ -165,7 +159,7 @@ export async function getReportsRows(
     options?: SelectOptions<ReportsRow>
 ): Promise<ReportsRow[]> {
     const [query, values] = buildSelect(filter, options)
-    return getRows('SELECT * FROM proxy.reports' + query, ...values) as unknown as ReportsRow[]
+    return getRows('SELECT * FROM reports' + query, ...values) as unknown as ReportsRow[]
 }
 
 export async function getOnlyReportsRowOrNull(
@@ -173,7 +167,7 @@ export async function getOnlyReportsRowOrNull(
     options?: SelectOptions<ReportsRow>
 ): Promise<ReportsRow | null> {
     const [query, values] = buildSelect(filter, options)
-    return getOnlyRowOrNull('SELECT * FROM proxy.reports' + query, ...values) as unknown as ReportsRow | null
+    return getOnlyRowOrNull('SELECT * FROM reports' + query, ...values) as unknown as ReportsRow | null
 }
 
 export async function getOnlyReportsRowOrThrow(
@@ -181,7 +175,7 @@ export async function getOnlyReportsRowOrThrow(
     options?: SelectOptions<ReportsRow>
 ): Promise<ReportsRow> {
     const [query, values] = buildSelect(filter, options)
-    return getOnlyRowOrThrow('SELECT * FROM proxy.reports' + query, ...values) as unknown as ReportsRow
+    return getOnlyRowOrThrow('SELECT * FROM reports' + query, ...values) as unknown as ReportsRow
 }
 
 export async function getRewritesRows(
@@ -189,7 +183,7 @@ export async function getRewritesRows(
     options?: SelectOptions<RewritesRow>
 ): Promise<RewritesRow[]> {
     const [query, values] = buildSelect(filter, options)
-    return getRows('SELECT * FROM proxy.rewrites' + query, ...values) as unknown as RewritesRow[]
+    return getRows('SELECT * FROM rewrites' + query, ...values) as unknown as RewritesRow[]
 }
 
 export async function getOnlyRewritesRowOrNull(
@@ -197,7 +191,7 @@ export async function getOnlyRewritesRowOrNull(
     options?: SelectOptions<RewritesRow>
 ): Promise<RewritesRow | null> {
     const [query, values] = buildSelect(filter, options)
-    return getOnlyRowOrNull('SELECT * FROM proxy.rewrites' + query, ...values) as unknown as RewritesRow | null
+    return getOnlyRowOrNull('SELECT * FROM rewrites' + query, ...values) as unknown as RewritesRow | null
 }
 
 export async function getOnlyRewritesRowOrThrow(
@@ -205,12 +199,12 @@ export async function getOnlyRewritesRowOrThrow(
     options?: SelectOptions<RewritesRow>
 ): Promise<RewritesRow> {
     const [query, values] = buildSelect(filter, options)
-    return getOnlyRowOrThrow('SELECT * FROM proxy.rewrites' + query, ...values) as unknown as RewritesRow
+    return getOnlyRowOrThrow('SELECT * FROM rewrites' + query, ...values) as unknown as RewritesRow
 }
 
 export async function getRulesRows(filter?: Partial<RulesRow>, options?: SelectOptions<RulesRow>): Promise<RulesRow[]> {
     const [query, values] = buildSelect(filter, options)
-    return getRows('SELECT * FROM proxy.rules' + query, ...values) as unknown as RulesRow[]
+    return getRows('SELECT * FROM rules' + query, ...values) as unknown as RulesRow[]
 }
 
 export async function getOnlyRulesRowOrNull(
@@ -218,7 +212,7 @@ export async function getOnlyRulesRowOrNull(
     options?: SelectOptions<RulesRow>
 ): Promise<RulesRow | null> {
     const [query, values] = buildSelect(filter, options)
-    return getOnlyRowOrNull('SELECT * FROM proxy.rules' + query, ...values) as unknown as RulesRow | null
+    return getOnlyRowOrNull('SELECT * FROM rules' + query, ...values) as unknown as RulesRow | null
 }
 
 export async function getOnlyRulesRowOrThrow(
@@ -226,7 +220,7 @@ export async function getOnlyRulesRowOrThrow(
     options?: SelectOptions<RulesRow>
 ): Promise<RulesRow> {
     const [query, values] = buildSelect(filter, options)
-    return getOnlyRowOrThrow('SELECT * FROM proxy.rules' + query, ...values) as unknown as RulesRow
+    return getOnlyRowOrThrow('SELECT * FROM rules' + query, ...values) as unknown as RulesRow
 }
 
 export async function getSettingsRows(
@@ -234,7 +228,7 @@ export async function getSettingsRows(
     options?: SelectOptions<SettingsRow>
 ): Promise<SettingsRow[]> {
     const [query, values] = buildSelect(filter, options)
-    return getRows('SELECT * FROM proxy.settings' + query, ...values) as unknown as SettingsRow[]
+    return getRows('SELECT * FROM settings' + query, ...values) as unknown as SettingsRow[]
 }
 
 export async function getOnlySettingsRowOrNull(
@@ -242,7 +236,7 @@ export async function getOnlySettingsRowOrNull(
     options?: SelectOptions<SettingsRow>
 ): Promise<SettingsRow | null> {
     const [query, values] = buildSelect(filter, options)
-    return getOnlyRowOrNull('SELECT * FROM proxy.settings' + query, ...values) as unknown as SettingsRow | null
+    return getOnlyRowOrNull('SELECT * FROM settings' + query, ...values) as unknown as SettingsRow | null
 }
 
 export async function getOnlySettingsRowOrThrow(
@@ -250,7 +244,7 @@ export async function getOnlySettingsRowOrThrow(
     options?: SelectOptions<SettingsRow>
 ): Promise<SettingsRow> {
     const [query, values] = buildSelect(filter, options)
-    return getOnlyRowOrThrow('SELECT * FROM proxy.settings' + query, ...values) as unknown as SettingsRow
+    return getOnlyRowOrThrow('SELECT * FROM settings' + query, ...values) as unknown as SettingsRow
 }
 
 export async function updateAllowedUserAgentsRow(
@@ -261,7 +255,7 @@ export async function updateAllowedUserAgentsRow(
         value: unknown
     }
 ): Promise<number> {
-    return update('proxy.allowedUserAgents', id, object, atomicHelper)
+    return update('allowedUserAgents', id, object, atomicHelper)
 }
 
 export async function updateApprovalRequestsRow(
@@ -272,7 +266,7 @@ export async function updateApprovalRequestsRow(
         value: unknown
     }
 ): Promise<number> {
-    return update('proxy.approvalRequests', id, object, atomicHelper)
+    return update('approvalRequests', id, object, atomicHelper)
 }
 
 export async function updateReportsRow(
@@ -283,7 +277,7 @@ export async function updateReportsRow(
         value: unknown
     }
 ): Promise<number> {
-    return update('proxy.reports', id, object, atomicHelper)
+    return update('reports', id, object, atomicHelper)
 }
 
 export async function updateRewritesRow(
@@ -294,7 +288,7 @@ export async function updateRewritesRow(
         value: unknown
     }
 ): Promise<number> {
-    return update('proxy.rewrites', id, object, atomicHelper)
+    return update('rewrites', id, object, atomicHelper)
 }
 
 export async function updateRulesRow(
@@ -305,7 +299,7 @@ export async function updateRulesRow(
         value: unknown
     }
 ): Promise<number> {
-    return update('proxy.rules', id, object, atomicHelper)
+    return update('rules', id, object, atomicHelper)
 }
 
 export async function updateSettingsRow(
@@ -316,35 +310,29 @@ export async function updateSettingsRow(
         value: unknown
     }
 ): Promise<number> {
-    return update('proxy.settings', id, object, atomicHelper)
+    return update('settings', id, object, atomicHelper)
 }
 
 export async function insertAllowedUserAgentsRow(object: NewAllowedUserAgentsRow): Promise<AllowedUserAgentsRowId> {
-    return insert(
-        'proxy.allowedUserAgents',
-        object as unknown as Record<string, unknown>
-    ) as Promise<AllowedUserAgentsRowId>
+    return insert('allowedUserAgents', object as unknown as Record<string, unknown>) as Promise<AllowedUserAgentsRowId>
 }
 
 export async function insertApprovalRequestsRow(object: NewApprovalRequestsRow): Promise<ApprovalRequestsRowId> {
-    return insert(
-        'proxy.approvalRequests',
-        object as unknown as Record<string, unknown>
-    ) as Promise<ApprovalRequestsRowId>
+    return insert('approvalRequests', object as unknown as Record<string, unknown>) as Promise<ApprovalRequestsRowId>
 }
 
 export async function insertReportsRow(object: NewReportsRow): Promise<ReportsRowId> {
-    return insert('proxy.reports', object as unknown as Record<string, unknown>) as Promise<ReportsRowId>
+    return insert('reports', object as unknown as Record<string, unknown>) as Promise<ReportsRowId>
 }
 
 export async function insertRewritesRow(object: NewRewritesRow): Promise<RewritesRowId> {
-    return insert('proxy.rewrites', object as unknown as Record<string, unknown>) as Promise<RewritesRowId>
+    return insert('rewrites', object as unknown as Record<string, unknown>) as Promise<RewritesRowId>
 }
 
 export async function insertRulesRow(object: NewRulesRow): Promise<RulesRowId> {
-    return insert('proxy.rules', object as unknown as Record<string, unknown>) as Promise<RulesRowId>
+    return insert('rules', object as unknown as Record<string, unknown>) as Promise<RulesRowId>
 }
 
 export async function insertSettingsRow(object: NewSettingsRow): Promise<SettingsRowId> {
-    return insert('proxy.settings', object as unknown as Record<string, unknown>) as Promise<SettingsRowId>
+    return insert('settings', object as unknown as Record<string, unknown>) as Promise<SettingsRowId>
 }
