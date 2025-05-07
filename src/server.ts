@@ -138,7 +138,8 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
         beeApiUrl: config.beeApiUrl,
         removePinHeader: config.removePinHeader ?? true,
         stampManager,
-        hostname: config.hostname
+        hostname: config.hostname,
+        instanceName: config.instanceName
     })
 
     if (config.homepage) {

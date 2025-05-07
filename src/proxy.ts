@@ -11,6 +11,7 @@ import {
     SettingsRowId
 } from './database/Schema'
 import { logger } from './logger'
+import { getNotFoundPage } from './not-found'
 import { StampManager } from './stamp'
 
 export const GET_PROXY_ENDPOINTS = ['/chunks/*', '/bytes/*', '/bzz/*', '/feeds/*']
@@ -122,6 +123,17 @@ async function fetchAndRespond(
             }
         }
 
+        if (response.status === 404) {
+            const sliceFn = Objects.getDeep(response.data, 'slice')
+            if (Types.isFunction(sliceFn)) {
+                const text = (sliceFn.call(response.data, 0, 100) as Buffer).toString('utf8')
+                if (text.includes('address not found or incorrect')) {
+                    res.status(404).contentType('text/html').send(getNotFoundPage())
+                    return
+                }
+            }
+        }
+
         let isHtml = false
 
         if (response.headers['content-type'] === 'text/html') {
@@ -161,15 +173,13 @@ async function fetchAndRespond(
 
         if (userAgentMatch) {
             allowed = true
-        } else {
+        } else if (!allowed) {
             const currentCid = Strings.searchSubstring(path, x => x.length > 48 && x.startsWith('bah'))
             const currentHash = Strings.searchHex(path, 64)
             hash = currentCid || currentHash
             const rule = hash ? await getOnlyRulesRowOrNull({ hash }) : null
             if (rule?.mode === 'allow') {
                 allowed = true
-            } else if (rule?.mode === 'deny') {
-                allowed = false
             }
         }
 
