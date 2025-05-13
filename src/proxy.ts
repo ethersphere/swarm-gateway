@@ -163,8 +163,13 @@ async function fetchAndRespond(
         let allowed = isHtml ? settings.defaultWebsiteRule === 'allow' : settings.defaultFileRule === 'allow'
 
         const userAgents = await Cache.get<string[]>('user-agents', Dates.minutes(1), async () => {
-            const rows = await getAllowedUserAgentsRows()
-            return rows.map(x => x.userAgent)
+            try {
+                const rows = await getAllowedUserAgentsRows()
+                return rows.map(x => x.userAgent)
+            } catch (error) {
+                logger.error('failed to query user agents', error)
+                return []
+            }
         })
 
         const userAgentMatch = userAgents.some(x => headers['user-agent']?.toLowerCase().includes(x.toLowerCase()))
@@ -177,9 +182,13 @@ async function fetchAndRespond(
             const currentCid = Strings.searchSubstring(path, x => x.length > 48 && x.startsWith('bah'))
             const currentHash = Strings.searchHex(path, 64)
             hash = currentCid || currentHash
-            const rule = hash ? await getOnlyRulesRowOrNull({ hash }) : null
-            if (rule?.mode === 'allow') {
-                allowed = true
+            try {
+                const rule = hash ? await getOnlyRulesRowOrNull({ hash }) : null
+                if (rule?.mode === 'allow') {
+                    allowed = true
+                }
+            } catch (error) {
+                logger.error('failed to query rules', error)
             }
         }
 
