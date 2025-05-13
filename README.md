@@ -20,6 +20,8 @@ The database configuration is expected to be set in the `DATABASE_CONFIG` enviro
 {"user":"","password":"","host":"","port":-1,"database":"","ssl":{"ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"}}
 ```
 
+Password may be omitted and specified in `DATABASE_PASSWORD` environment variable instead.
+
 ### Overview
 
 | Name                      | Default Value             | Description                                       |

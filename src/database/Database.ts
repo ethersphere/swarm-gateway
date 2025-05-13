@@ -1,7 +1,13 @@
 import { Arrays, Objects, Types } from 'cafe-utility'
 import { createPool } from 'mysql2/promise'
 
-const pool = createPool(JSON.parse(Types.asString(process.env.DATABASE_CONFIG, { name: 'DATABASE_CONFIG' })))
+const databaseConfig = JSON.parse(Types.asString(process.env.DATABASE_CONFIG, { name: 'DATABASE_CONFIG' }))
+
+if (process.env.DATABASE_PASSWORD) {
+    databaseConfig.password = Types.asString(process.env.DATABASE_PASSWORD, { name: 'DATABASE_PASSWORD' })
+}
+
+const pool = createPool(databaseConfig)
 
 const λ = Arrays.makePipe
 
