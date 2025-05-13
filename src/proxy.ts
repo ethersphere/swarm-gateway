@@ -160,7 +160,11 @@ async function fetchAndRespond(
             return row || DEFAULT_SETTINGS
         })
 
-        let allowed = isHtml ? settings.defaultWebsiteRule === 'allow' : settings.defaultFileRule === 'allow'
+        let allowed = path.includes('.eth')
+            ? true
+            : isHtml
+            ? settings.defaultWebsiteRule === 'allow'
+            : settings.defaultFileRule === 'allow'
 
         const userAgents = await Cache.get<string[]>('user-agents', Dates.minutes(1), async () => {
             try {
