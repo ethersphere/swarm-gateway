@@ -1,0 +1,42 @@
+name: Setup Environment
+description: Common steps for setup
+
+runs:
+    using: 'composite'
+    steps:
+        - uses: actions/setup-node@v4
+          with:
+              node-version: 18
+
+        - name: Install dependencies
+          run: npm ci
+          shell: bash
+
+        - name: Build
+          run: npm run build
+          shell: bash
+
+        - name: Run bee-dev
+          run: npx bee-dev &
+          shell: bash
+
+        - name: Wait for bee-dev
+          run: npx npxie await http://localhost:16337/stamps
+          shell: bash
+
+        - name: Wait for MariaDB
+          run: |
+              until mysqladmin ping -h 127.0.0.1 -uroot -proot --silent; do
+                echo "Waiting for MariaDB..."
+                sleep 2
+              done
+          shell: bash
+
+        - name: Run gateway once to init database
+          run: |
+              export DATABASE_PASSWORD="test_pass"
+              export DATABASE_CONFIG="{\"user\":\"test_user\",\"database\":\"test_db\"}"
+              export TEMPORARY=5
+              export BEE_API_URL=http://localhost:16337
+              node dist
+          shell: bash

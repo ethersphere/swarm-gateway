@@ -178,21 +178,20 @@ async function fetchAndRespond(
 
         const userAgentMatch = userAgents.some(x => headers['user-agent']?.toLowerCase().includes(x.toLowerCase()))
 
-        let hash = null
-
         if (userAgentMatch) {
             allowed = true
-        } else if (!allowed) {
-            const currentCid = Strings.searchSubstring(path, x => x.length > 48 && x.startsWith('bah'))
-            const currentHash = Strings.searchHex(path, 64)
-            hash = currentCid || currentHash
-            try {
-                const rule = hash ? await getOnlyRulesRowOrNull({ hash }) : null
-                if (rule?.mode === 'allow') {
-                    allowed = true
-                }
-            } catch (error) {
-                logger.error('failed to query rules', error)
+        }
+
+        const currentCid = Strings.searchSubstring(path, x => x.length > 48 && x.startsWith('bah'))
+        const currentHash = Strings.searchHex(path, 64)
+        const hash = currentCid || currentHash
+        const rule = hash ? await getOnlyRulesRowOrNull({ hash }).catch(() => null) : null
+
+        if (rule) {
+            if (rule.mode === 'deny') {
+                allowed = false
+            } else if (rule.mode === 'allow') {
+                allowed = true
             }
         }
 

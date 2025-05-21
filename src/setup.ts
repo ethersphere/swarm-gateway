@@ -14,7 +14,7 @@ export async function setupSchema() {
         \`id\` int NOT NULL PRIMARY KEY AUTO_INCREMENT,
         \`userAgent\` varchar(100) NOT NULL,
         \`createdAt\` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;`
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
         ],
         [
             'approvalRequests',
@@ -23,7 +23,7 @@ export async function setupSchema() {
         \`hash\` varchar(128) NOT NULL,
         \`ens\` varchar(128),
         \`createdAt\` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;`
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
         ],
         [
             'reports',
@@ -32,7 +32,7 @@ export async function setupSchema() {
         \`hash\` varchar(128) NOT NULL,
         \`reason\` text,
         \`createdAt\` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;`
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
         ],
         [
             'rewrites',
@@ -41,7 +41,7 @@ export async function setupSchema() {
         \`subdomain\` varchar(63) NOT NULL,
         \`target\` varchar(128) NOT NULL,
         \`createdAt\` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;`
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
         ],
         [
             'rules',
@@ -50,7 +50,7 @@ export async function setupSchema() {
         \`hash\` varchar(128) NOT NULL,
         \`mode\` enum('allow','deny') NOT NULL,
         \`createdAt\` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;`
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
         ],
         [
             'settings',
@@ -58,8 +58,8 @@ export async function setupSchema() {
         \`id\` int NOT NULL PRIMARY KEY AUTO_INCREMENT,
         \`name\` varchar(100) NOT NULL,
         \`defaultWebsiteRule\` enum('allow','deny') NOT NULL,
-        \`defaultFileRule\` enum('allow','deny') CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;`
+        \`defaultFileRule\` enum('allow','deny') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
         ]
     ]
 
