@@ -21,7 +21,9 @@ const DEFAULT_SETTINGS: SettingsRow = {
     id: -1 as SettingsRowId,
     name: 'default',
     defaultWebsiteRule: 'deny',
-    defaultFileRule: 'allow'
+    defaultFileRule: 'allow',
+    defaultEnsRule: 'allow',
+    redirectUri: ''
 }
 
 const BAD_PATH = `bzz/${'00'.repeat(32)}`
@@ -161,7 +163,7 @@ async function fetchAndRespond(
         })
 
         let allowed = path.includes('.eth')
-            ? true
+            ? settings.defaultEnsRule === 'allow'
             : isHtml
             ? settings.defaultWebsiteRule === 'allow'
             : settings.defaultFileRule === 'allow'
@@ -197,9 +199,9 @@ async function fetchAndRespond(
 
         if (!allowed) {
             if (hash) {
-                res.redirect(`/forbidden?hash=${hash}`)
+                res.redirect(`${settings.redirectUri}/forbidden?hash=${hash}`)
             } else {
-                res.redirect('/forbidden')
+                res.redirect(`${settings.redirectUri}/forbidden`)
             }
             return
         }

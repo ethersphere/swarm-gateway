@@ -3,6 +3,7 @@ import { getOnlyRowOrNull, getOnlyRowOrThrow, getRows, insert, update } from './
 type SelectOptions<T> = {
     order?: { column: keyof T; direction: 'ASC' | 'DESC' }
     limit?: number
+    offset?: number
 }
 
 function buildSelect<T>(filter?: Partial<T>, options?: SelectOptions<T>): [string, unknown[]] {
@@ -15,7 +16,8 @@ function buildSelect<T>(filter?: Partial<T>, options?: SelectOptions<T>): [strin
     const values = filter ? Object.values(filter) : []
     const order = options?.order ? ' ORDER BY ' + (options.order.column as string) + ' ' + options.order.direction : ''
     const limit = options?.limit ? ' LIMIT ' + options.limit : ''
-    return [where + order + limit, values]
+    const offset = options?.offset ? ' OFFSET ' + options.offset : ''
+    return [where + order + limit + offset, values]
 }
 
 export type AllowedUserAgentsRowId = number & { __brand: 'AllowedUserAgentsRowId' }
@@ -63,6 +65,8 @@ export interface SettingsRow {
     name: string
     defaultWebsiteRule: 'allow' | 'deny'
     defaultFileRule: 'allow' | 'deny'
+    defaultEnsRule: 'allow' | 'deny'
+    redirectUri: string
 }
 
 export interface NewAllowedUserAgentsRow {
@@ -98,6 +102,8 @@ export interface NewSettingsRow {
     name: string
     defaultWebsiteRule: 'allow' | 'deny'
     defaultFileRule: 'allow' | 'deny'
+    defaultEnsRule: 'allow' | 'deny'
+    redirectUri: string
 }
 
 export async function getAllowedUserAgentsRows(

@@ -2,6 +2,7 @@
 import { Dates, Types } from 'cafe-utility'
 import { EnvironmentVariables, getAppConfig, getServerConfig, getStampConfig } from './config'
 import { logger, subscribeLogServerRequests } from './logger'
+import { runMigrations } from './migration'
 import { createApp } from './server'
 import { setupSchema } from './setup'
 import { StampManager } from './stamp'
@@ -16,6 +17,7 @@ async function main() {
     logger.debug('stamp config', stampConfig)
 
     await setupSchema()
+    await runMigrations()
 
     const stampManager = new StampManager(appConfig.beeApiUrl, stampConfig)
     stampManager.start()

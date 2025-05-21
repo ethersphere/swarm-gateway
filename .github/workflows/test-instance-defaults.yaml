@@ -34,8 +34,8 @@ jobs:
             - name: Insert instance
               run: |
                   mysql -h 127.0.0.1 -u test_user -ptest_pass test_db -e "
-                    INSERT INTO settings (name, defaultWebsiteRule, defaultFileRule) VALUES
-                      ('strict', 'deny', 'deny')
+                    INSERT INTO settings (name, defaultWebsiteRule, defaultFileRule, defaultEnsRule, redirectUri) VALUES
+                      ('strict', 'deny', 'deny', 'deny', '')
                     ;
                   "
 
@@ -53,3 +53,6 @@ jobs:
 
             - name: Expect HTTP 302 for website
               run: npx npxie code-equals http://localhost:3000/bzz/1000000000000000000000000000000000000000000000000000000000000000 302
+
+            - name: Expect HTTP 302 for .eth
+              run: npx npxie code-equals http://localhost:3000/bzz/arbitrary.eth 302
