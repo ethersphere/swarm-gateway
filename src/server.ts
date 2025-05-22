@@ -3,6 +3,7 @@ import axios from 'axios'
 import bodyParser from 'body-parser'
 import { Arrays, Strings, Types } from 'cafe-utility'
 import express, { Application, NextFunction, Request, Response } from 'express'
+import { checkChallenge, createChallenge } from './challenge'
 import { AppConfig } from './config'
 import { runQuery } from './database/Database'
 import {
@@ -80,16 +81,28 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
         }
     })
 
+    app.post('/challenge', async (req, res) => {
+        res.send(await createChallenge())
+    })
+
     app.post('/moderation/approval', async (req, res) => {
         const json = JSON.parse(req.body.toString())
-        const { hash, ens } = json
+        const { hash, ens, challengeId, challengeSolution } = json
+        if (!(await checkChallenge(challengeId, challengeSolution))) {
+            res.sendStatus(400)
+            return
+        }
         await insertApprovalRequestsRow({ hash: Types.asString(hash), ens: Types.asNullable(Types.asString, ens) })
         res.sendStatus(200)
     })
 
     app.post('/moderation/report', async (req, res) => {
         const json = JSON.parse(req.body.toString())
-        const { hash, reason } = json
+        const { hash, reason, challengeId, challengeSolution } = json
+        if (!(await checkChallenge(challengeId, challengeSolution))) {
+            res.sendStatus(400)
+            return
+        }
         await insertReportsRow({ hash: Types.asString(hash), reason })
         res.sendStatus(200)
     })

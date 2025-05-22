@@ -44,7 +44,8 @@
             </ul>
         </footer>
         <script src="/snackbar.js"></script>
-        <script>
+        <script type="module">
+            import * as Utils from 'https://cdn.jsdelivr.net/npm/cafe-utility@28.0.0/+esm'
             document.getElementById('submit').addEventListener('click', async () => {
                 let hash = document.getElementById('hash').value
                 if (!hash) {
@@ -53,12 +54,31 @@
                 }
                 const reason = document.getElementById('reason').value || null
                 try {
+                    const challengeResponse = await fetch('/challenge', {
+                        method: 'POST'
+                    })
+                    const challenge = await challengeResponse.json()
+                    let challengeSolution = ''
+                    while (true) {
+                        const solution = Utils.Strings.randomHex(64)
+                        const result = Utils.Binary.keccak256(
+                            Utils.Binary.concatBytes(
+                                Utils.Binary.hexToUint8Array(challenge.nonce),
+                                Utils.Binary.hexToUint8Array(solution)
+                            )
+                        )
+                        const resultHex = Utils.Binary.uint8ArrayToHex(result)
+                        if (resultHex.startsWith('0'.repeat(challenge.difficulty))) {
+                            challengeSolution = solution
+                            break
+                        }
+                    }
                     const response = await fetch('/moderation/report', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ hash, reason })
+                        body: JSON.stringify({ hash, reason, challengeId: challenge.id, challengeSolution })
                     })
                     if (response.status === 200) {
                         snackbar('Report submitted successfully!', 'success')

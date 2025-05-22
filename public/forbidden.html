@@ -47,8 +47,9 @@
             </ul>
         </footer>
         <script src="/snackbar.js"></script>
-        <script>
-            if (window.location.search && window.location.search) {
+        <script type="module">
+            import * as Utils from 'https://cdn.jsdelivr.net/npm/cafe-utility@28.0.0/+esm'
+            if (window.location.search && window.location.search.includes('=')) {
                 let hash = window.location.search.split('=')[1]
                 if (hash.startsWith('0x')) {
                     hash = hash.slice(2)
@@ -66,18 +67,37 @@
                 if (hash.startsWith('0x')) {
                     hash = hash.slice(2)
                 }
-                if (!hash.toLowerCase().match(/^[0-9a-f]{64}$/)) {
-                    snackbar('Invalid hash format. Please enter a valid hash.', 'error')
+                if (hash.length < 48 || hash.length > 64) {
+                    snackbar('Invalid hash length. Please enter a valid hash.', 'error')
                     return
                 }
                 const ens = document.getElementById('ens').value || null
                 try {
+                    const challengeResponse = await fetch('/challenge', {
+                        method: 'POST'
+                    })
+                    const challenge = await challengeResponse.json()
+                    let challengeSolution = ''
+                    while (true) {
+                        const solution = Utils.Strings.randomHex(64)
+                        const result = Utils.Binary.keccak256(
+                            Utils.Binary.concatBytes(
+                                Utils.Binary.hexToUint8Array(challenge.nonce),
+                                Utils.Binary.hexToUint8Array(solution)
+                            )
+                        )
+                        const resultHex = Utils.Binary.uint8ArrayToHex(result)
+                        if (resultHex.startsWith('0'.repeat(challenge.difficulty))) {
+                            challengeSolution = solution
+                            break
+                        }
+                    }
                     const response = await fetch('/moderation/approval', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ hash, ens })
+                        body: JSON.stringify({ hash, ens, challengeId: challenge.id, challengeSolution })
                     })
                     if (response.status === 200) {
                         snackbar('Request submitted successfully!', 'success')

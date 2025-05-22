@@ -35,6 +35,15 @@ export interface ApprovalRequestsRow {
     createdAt: Date
 }
 
+export type ChallengesRowId = number & { __brand: 'ChallengesRowId' }
+export interface ChallengesRow {
+    id: ChallengesRowId
+    nonce: string
+    difficulty: number
+    solution?: string | null
+    createdAt: Date
+}
+
 export type ReportsRowId = number & { __brand: 'ReportsRowId' }
 export interface ReportsRow {
     id: ReportsRowId
@@ -77,6 +86,13 @@ export interface NewAllowedUserAgentsRow {
 export interface NewApprovalRequestsRow {
     hash: string
     ens?: string | null
+    createdAt?: Date | null
+}
+
+export interface NewChallengesRow {
+    nonce: string
+    difficulty: number
+    solution?: string | null
     createdAt?: Date | null
 }
 
@@ -158,6 +174,30 @@ export async function getOnlyApprovalRequestsRowOrThrow(
 ): Promise<ApprovalRequestsRow> {
     const [query, values] = buildSelect(filter, options)
     return getOnlyRowOrThrow('SELECT * FROM approvalRequests' + query, ...values) as unknown as ApprovalRequestsRow
+}
+
+export async function getChallengesRows(
+    filter?: Partial<ChallengesRow>,
+    options?: SelectOptions<ChallengesRow>
+): Promise<ChallengesRow[]> {
+    const [query, values] = buildSelect(filter, options)
+    return getRows('SELECT * FROM challenges' + query, ...values) as unknown as ChallengesRow[]
+}
+
+export async function getOnlyChallengesRowOrNull(
+    filter?: Partial<ChallengesRow>,
+    options?: SelectOptions<ChallengesRow>
+): Promise<ChallengesRow | null> {
+    const [query, values] = buildSelect(filter, options)
+    return getOnlyRowOrNull('SELECT * FROM challenges' + query, ...values) as unknown as ChallengesRow | null
+}
+
+export async function getOnlyChallengesRowOrThrow(
+    filter?: Partial<ChallengesRow>,
+    options?: SelectOptions<ChallengesRow>
+): Promise<ChallengesRow> {
+    const [query, values] = buildSelect(filter, options)
+    return getOnlyRowOrThrow('SELECT * FROM challenges' + query, ...values) as unknown as ChallengesRow
 }
 
 export async function getReportsRows(
@@ -275,6 +315,17 @@ export async function updateApprovalRequestsRow(
     return update('approvalRequests', id, object, atomicHelper)
 }
 
+export async function updateChallengesRow(
+    id: ChallengesRowId,
+    object: Partial<NewChallengesRow>,
+    atomicHelper?: {
+        key: keyof NewChallengesRow
+        value: unknown
+    }
+): Promise<number> {
+    return update('challenges', id, object, atomicHelper)
+}
+
 export async function updateReportsRow(
     id: ReportsRowId,
     object: Partial<NewReportsRow>,
@@ -325,6 +376,10 @@ export async function insertAllowedUserAgentsRow(object: NewAllowedUserAgentsRow
 
 export async function insertApprovalRequestsRow(object: NewApprovalRequestsRow): Promise<ApprovalRequestsRowId> {
     return insert('approvalRequests', object as unknown as Record<string, unknown>) as Promise<ApprovalRequestsRowId>
+}
+
+export async function insertChallengesRow(object: NewChallengesRow): Promise<ChallengesRowId> {
+    return insert('challenges', object as unknown as Record<string, unknown>) as Promise<ChallengesRowId>
 }
 
 export async function insertReportsRow(object: NewReportsRow): Promise<ReportsRowId> {
