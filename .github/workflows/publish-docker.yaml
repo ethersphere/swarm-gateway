@@ -21,7 +21,7 @@ jobs:
             - name: Build image, retag and push
               if: success()
               run: |
-                  docker build -t ethersphere/swarm-proxy:${TAG} .
-                  docker tag ethersphere/swarm-proxy:${TAG} quay.io/ethersphere/swarm-proxy:${TAG}
-                  docker push ethersphere/swarm-proxy:${TAG}
-                  docker push quay.io/ethersphere/swarm-proxy:${TAG}
+                  docker build -t ethersphere/swarm-gateway:${TAG} .
+                  docker tag ethersphere/swarm-gateway:${TAG} quay.io/ethersphere/swarm-gateway:${TAG}
+                  docker push ethersphere/swarm-gateway:${TAG}
+                  docker push quay.io/ethersphere/swarm-gateway:${TAG}
