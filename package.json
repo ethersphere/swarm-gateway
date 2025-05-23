@@ -1,5 +1,5 @@
 {
-    "name": "hiveway",
+    "name": "swarm-proxy",
     "version": "0.1.0",
     "main": "dist/index.js",
     "scripts": {
