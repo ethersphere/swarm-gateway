@@ -63,6 +63,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
     logger.info(`resolving .eth names and CIDs at *.${config.hostname}`)
 
     app.get('/metrics', async (_req, res) => {
+        res.set('Content-Type', register.contentType)
         res.write(await register.metrics())
         res.end()
     })

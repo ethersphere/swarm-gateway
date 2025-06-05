@@ -31,13 +31,13 @@ jobs:
               run: npx npxie await http://localhost:16337/stamps
 
             - name: Run gateway once to buy batch
-              run: DATABASE_CONFIG={} TEMPORARY=5 BEE_API_URL=http://localhost:16337 POSTAGE_AMOUNT=414720000 POSTAGE_DEPTH=20 node dist
+              run: DATABASE_CONFIG={} TEMPORARY=5 BEE_API_URL=http://localhost:16337 POSTAGE_AMOUNT=414720001 POSTAGE_DEPTH=20 node dist
 
             - name: Verify 1st batch has been bought
               run: npx npxie json-equals http://localhost:16337/stamps stamps.length 1
 
             - name: Re-run gateway to buy because of expired batch
-              run: DATABASE_CONFIG={} TEMPORARY=5 BEE_API_URL=http://localhost:16337 POSTAGE_AMOUNT=414720000 POSTAGE_DEPTH=20 POSTAGE_THRESHOLD_SECONDS=100000 node dist
+              run: DATABASE_CONFIG={} TEMPORARY=5 BEE_API_URL=http://localhost:16337 POSTAGE_AMOUNT=414720001 POSTAGE_DEPTH=20 POSTAGE_THRESHOLD_SECONDS=100000 node dist
 
             - name: Verify 2nd batch has been bought
               run: npx npxie json-equals http://localhost:16337/stamps stamps.length 2
@@ -64,13 +64,13 @@ jobs:
               run: npx npxie await http://localhost:16337/stamps
 
             - name: Run gateway once to buy batch
-              run: DATABASE_CONFIG={} TEMPORARY=5 BEE_API_URL=http://localhost:16337 POSTAGE_AMOUNT=414720000 POSTAGE_DEPTH=20 POSTAGE_KEEP_ALIVE=true node dist
+              run: DATABASE_CONFIG={} TEMPORARY=5 BEE_API_URL=http://localhost:16337 POSTAGE_AMOUNT=414720001 POSTAGE_DEPTH=20 POSTAGE_KEEP_ALIVE=true node dist
 
             - name: Verify batch TTL is 1 day
               run: npx npxie json-equals http://localhost:16337/stamps stamps.0.batchTTL 86400
 
             - name: Re-run gateway to top up the batch
-              run: DATABASE_CONFIG={} TEMPORARY=5 BEE_API_URL=http://localhost:16337 POSTAGE_AMOUNT=414720000 POSTAGE_DEPTH=20 POSTAGE_KEEP_ALIVE=true POSTAGE_THRESHOLD_SECONDS=100000 node dist
+              run: DATABASE_CONFIG={} TEMPORARY=5 BEE_API_URL=http://localhost:16337 POSTAGE_AMOUNT=414720001 POSTAGE_DEPTH=20 POSTAGE_KEEP_ALIVE=true POSTAGE_THRESHOLD_SECONDS=100000 node dist
 
             - name: Verify batch TTL is 2 days
               run: npx npxie json-equals http://localhost:16337/stamps stamps.0.batchTTL 172800

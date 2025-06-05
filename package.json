@@ -8,10 +8,10 @@
     },
     "license": "BSD-3-Clause",
     "dependencies": {
-        "@ethersphere/bee-js": "^9.1.0",
+        "@ethersphere/bee-js": "^9.4.0",
         "axios": "^0.30.0",
         "body-parser": "^1.20.3",
-        "cafe-utility": "^27.16.2",
+        "cafe-utility": "^28.1.0",
         "express": "^4.21.2",
         "mysql2": "^3.14.0",
         "prom-client": "^14.1.0",

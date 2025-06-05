@@ -54,7 +54,7 @@
                 if (hash.startsWith('0x')) {
                     hash = hash.slice(2)
                 }
-                if (hash.toLowerCase().match(/^[0-9a-f]{64}$/)) {
+                if (hash.length < 48 || hash.length > 64) {
                     document.getElementById('hash').value = hash
                 }
             }
