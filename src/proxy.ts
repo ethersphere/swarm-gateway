@@ -96,6 +96,9 @@ async function fetchAndRespond(
         if (method === 'POST' && options.stampManager.enabled) {
             headers[SWARM_STAMP_HEADER] = options.stampManager.getPostageStamp()
         }
+        if (body && Buffer.isBuffer(body)) {
+            body = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength)
+        }
         let response = await axios({
             method,
             url: Strings.joinUrl(options.beeApiUrl, path) + Objects.toQueryString(query, true),

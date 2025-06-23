@@ -45,7 +45,6 @@ jobs:
                   export DATABASE_PASSWORD="test_pass"
                   export DATABASE_CONFIG="{\"user\":\"test_user\",\"database\":\"test_db\"}"
                   export TEMPORARY=5
-                  export BEE_API_URL=http://localhost:16337
                   node dist > gateway.log 2>&1 < /dev/null &
 
             - name: Expect HTTP 302 for file
@@ -93,7 +92,6 @@ jobs:
                   export DATABASE_PASSWORD="test_pass"
                   export DATABASE_CONFIG="{\"user\":\"test_user\",\"database\":\"test_db\"}"
                   export TEMPORARY=5
-                  export BEE_API_URL=http://localhost:16337
                   node dist > gateway.log 2>&1 < /dev/null &
 
             - name: Expect HTTP 200 for file
@@ -141,7 +139,6 @@ jobs:
                   export DATABASE_PASSWORD="test_pass"
                   export DATABASE_CONFIG="{\"user\":\"test_user\",\"database\":\"test_db\"}"
                   export TEMPORARY=5
-                  export BEE_API_URL=http://localhost:16337
                   node dist > gateway.log 2>&1 < /dev/null &
 
             - name: Expect absolute redirect URI

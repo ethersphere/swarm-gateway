@@ -21,7 +21,7 @@ runs:
           shell: bash
 
         - name: Wait for bee-dev
-          run: npx npxie await http://localhost:16337/stamps
+          run: npx npxie await http://localhost:1633/stamps
           shell: bash
 
         - name: Wait for MariaDB
@@ -37,6 +37,5 @@ runs:
               export DATABASE_PASSWORD="test_pass"
               export DATABASE_CONFIG="{\"user\":\"test_user\",\"database\":\"test_db\"}"
               export TEMPORARY=5
-              export BEE_API_URL=http://localhost:16337
               node dist
           shell: bash

@@ -1,4 +1,4 @@
-name: Test Policy
+name: Test Upload
 
 on:
     push:
@@ -9,7 +9,7 @@ on:
             - '**'
 
 jobs:
-    test-html:
+    test-small-upload:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -36,10 +36,10 @@ jobs:
                   export TEMPORARY=5
                   node dist > gateway.log 2>&1 < /dev/null &
 
-            - name: Expect HTTP 302 for HTML
-              run: npx npxie 3xx http://localhost:3000/bzz/1000000000000000000000000000000000000000000000000000000000000000 /forbidden?hash=1000000000000000000000000000000000000000000000000000000000000000
+            - name: Upload small JSON
+              run: npx npxie post-json http://localhost:3000/bzz 100
 
-    test-html-ens:
+    test-large-upload:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -63,38 +63,8 @@ jobs:
             - name: Run gateway
               run: |
                   export DATABASE_CONFIG="{}"
-                  export TEMPORARY=5
+                  export TEMPORARY=15
                   node dist > gateway.log 2>&1 < /dev/null &
 
-            - name: Expect HTTP 200 for HTML setup with .eth
-              run: npx npxie code-equals http://localhost:3000/bzz/arbitrary.eth 200
-
-    test-other:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 18
-
-            - name: Install dependencies
-              run: npm ci
-
-            - name: Build
-              run: npm run build
-
-            - name: Run bee-dev
-              run: npx bee-dev &
-
-            - name: Wait for bee-dev
-              run: npx npxie await http://localhost:1633/stamps
-
-            - name: Run gateway
-              run: |
-                  export DATABASE_CONFIG="{}"
-                  export TEMPORARY=5
-                  node dist > gateway.log 2>&1 < /dev/null &
-
-            - name: Expect HTTP 200 for non-HTML
-              run: npx npxie code-equals http://localhost:3000/bzz/f000000000000000000000000000000000000000000000000000000000000000 200
+            - name: Upload large JSON
+              run: npx npxie post-json http://localhost:3000/bzz 100000000
