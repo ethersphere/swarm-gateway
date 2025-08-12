@@ -1,0 +1,63 @@
+name: Test Pretty URL
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - '**'
+
+jobs:
+    test-pretty-url:
+        runs-on: ubuntu-latest
+        services:
+            mariadb:
+                image: mariadb:10.5
+                env:
+                    MYSQL_ROOT_PASSWORD: root
+                    MYSQL_DATABASE: test_db
+                    MYSQL_USER: test_user
+                    MYSQL_PASSWORD: test_pass
+                ports:
+                    - 3306:3306
+                options: >-
+                    --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+                    --health-interval=10s
+                    --health-timeout=5s
+                    --health-retries=3
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: ./.github/actions/setup-env
+
+            - name: Insert instance
+              run: |
+                  mysql -h 127.0.0.1 -u test_user -ptest_pass test_db -e "
+                    INSERT INTO settings (name, defaultWebsiteRule, defaultFileRule, defaultEnsRule, redirectUri) VALUES
+                      ('main', 'allow', 'allow', 'allow', '')
+                    ;
+                  "
+
+            - name: Run gateway
+              run: |
+                  export INSTANCE_NAME="main"
+                  export DATABASE_PASSWORD="test_pass"
+                  export DATABASE_CONFIG="{\"user\":\"test_user\",\"database\":\"test_db\"}"
+                  export TEMPORARY=5
+                  node dist > gateway.log 2>&1 < /dev/null &
+
+            - name: Expect HTTP 200 without trailing slash
+              run: npx npxie code-equals http://localhost:3000/bzz/2000000000000000000000000000000000000000000000000000000000000000/c/development-updates 200
+
+            - name: Expect HTTP 200 with trailing slash
+              run: npx npxie code-equals http://localhost:3000/bzz/2000000000000000000000000000000000000000000000000000000000000000/c/development-updates/ 200
+
+            - name: Expect HTTP 200 without extension
+              run: npx npxie code-equals http://localhost:3000/bzz/2000000000000000000000000000000000000000000000000000000000000000/c/development-updates/index 200
+
+            - name: Expect HTTP 200 with extension
+              run: npx npxie code-equals http://localhost:3000/bzz/2000000000000000000000000000000000000000000000000000000000000000/c/development-updates/index.html 200
+
+            - name: Expect HTTP 404 for non-existent file
+              run: npx npxie code-equals http://localhost:3000/bzz/2000000000000000000000000000000000000000000000000000000000000000/c/development-updates/about 404

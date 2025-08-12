@@ -159,7 +159,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
     if (config.homepage) {
         app.use(async (req, res, next) => {
             try {
-                const url = Strings.joinUrl(config.beeApiUrl, 'bzz', config.homepage, req.url)
+                const url = Strings.joinUrl([config.beeApiUrl, 'bzz', config.homepage, req.url])
                 logger.debug('attempting to fetch homepage', { url })
 
                 const response = await axios.get(url, {
