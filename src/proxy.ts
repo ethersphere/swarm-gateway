@@ -53,7 +53,7 @@ export function createProxyEndpoints(app: Application, options: Options) {
             )
             await fetchAndRespond(
                 'GET',
-                Strings.joinUrl('bzz', newUrl, req.path),
+                Strings.joinUrl(['bzz', newUrl, req.path]),
                 req.query,
                 req.headers,
                 req.body,
@@ -101,7 +101,7 @@ async function fetchAndRespond(
         }
         let response = await axios({
             method,
-            url: Strings.joinUrl(options.beeApiUrl, path) + Objects.toQueryString(query, true),
+            url: Strings.joinUrl([options.beeApiUrl, path]) + Objects.toQueryString(query, true),
             data: body,
             headers,
             timeout: Dates.minutes(20),
@@ -111,20 +111,27 @@ async function fetchAndRespond(
         })
 
         if (response.status === 404 || (response.status >= 300 && response.status < 400)) {
-            const url = Strings.joinUrl(options.beeApiUrl, path) + '.html' + Objects.toQueryString(query, true)
-            const probeResponse = await axios({
-                method,
-                url,
-                data: body,
-                headers,
-                timeout: Dates.minutes(20),
-                validateStatus: status => status < 500,
-                responseType: 'arraybuffer',
-                maxRedirects: 0
-            })
+            const uglyUrls = [
+                Strings.joinUrl([options.beeApiUrl, path, 'index.html']) + Objects.toQueryString(query, true)
+            ]
+            if (!path.endsWith('/')) {
+                uglyUrls.push(Strings.joinUrl([options.beeApiUrl, path]) + '.html' + Objects.toQueryString(query, true))
+            }
+            for (const uglyUrl of uglyUrls) {
+                const probeResponse = await axios({
+                    method,
+                    url: uglyUrl,
+                    data: body,
+                    headers,
+                    timeout: Dates.minutes(20),
+                    validateStatus: status => status < 500,
+                    responseType: 'arraybuffer',
+                    maxRedirects: 0
+                })
 
-            if (probeResponse.status >= 200 && probeResponse.status < 300) {
-                response = probeResponse
+                if (probeResponse.status >= 200 && probeResponse.status < 300) {
+                    response = probeResponse
+                }
             }
         }
 
