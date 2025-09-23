@@ -1,0 +1,62 @@
+name: Test Type Hints
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - '**'
+
+jobs:
+    test-type-hints:
+        runs-on: ubuntu-latest
+        services:
+            mariadb:
+                image: mariadb:10.5
+                env:
+                    MYSQL_ROOT_PASSWORD: root
+                    MYSQL_DATABASE: test_db
+                    MYSQL_USER: test_user
+                    MYSQL_PASSWORD: test_pass
+                ports:
+                    - 3306:3306
+                options: >-
+                    --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+                    --health-interval=10s
+                    --health-timeout=5s
+                    --health-retries=3
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: ./.github/actions/setup-env
+
+            - name: Insert type hint
+              run: |
+                  mysql -h 127.0.0.1 -u test_user -ptest_pass test_db -e "
+                    INSERT INTO typeHints (byteStart, byteLength, hash, label) VALUES
+                      ('0', '8', '71dc337a5ba6dd3ef80efc0af181decd1a9d767bcd3bb44c855a2b67d4632917', 'system')
+                    ;
+                  "
+
+            - name: Insert instance
+              run: |
+                  mysql -h 127.0.0.1 -u test_user -ptest_pass test_db -e "
+                    INSERT INTO settings (name, defaultWebsiteRule, defaultFileRule, defaultEnsRule, redirectUri) VALUES
+                      ('strict', 'deny', 'deny', 'deny', '')
+                    ;
+                  "
+
+            - name: Run gateway
+              run: |
+                  export INSTANCE_NAME="strict"
+                  export DATABASE_PASSWORD="test_pass"
+                  export DATABASE_CONFIG="{\"user\":\"test_user\",\"database\":\"test_db\"}"
+                  export TEMPORARY=5
+                  node dist > gateway.log 2>&1 < /dev/null &
+
+            - name: Expect HTTP 302 for file
+              run: npx npxie code-equals http://localhost:3000/bzz/c399ab1491467143701ad8bac0f4353bf541daffbc33f86d45455ed3380b4e3b/ 302
+
+            - name: Expect HTTP 200 for type hint match
+              run: npx npxie code-equals http://localhost:3000/bzz/1cb8b28d3f7e3cf8adeeb90c1ecd5a9674db2f35279d471907ad95d958ea37a5/ 200

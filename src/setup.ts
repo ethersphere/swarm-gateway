@@ -71,6 +71,18 @@ export async function setupSchema() {
         \`createdAt\` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (\`id\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+        ],
+        [
+            'typeHints',
+            `CREATE TABLE \`typeHints\` (
+        \`id\` int NOT NULL AUTO_INCREMENT,
+        \`byteStart\` int NOT NULL,
+        \`byteLength\` int NOT NULL,
+        \`hash\` varchar(64) NOT NULL,
+        \`label\` varchar(32) NOT NULL,
+        \`createdAt\` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
         ]
     ]
 
