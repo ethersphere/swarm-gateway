@@ -5,14 +5,10 @@ import { Arrays, Strings, Types } from 'cafe-utility'
 import express, { Application, NextFunction, Request, Response } from 'express'
 import { checkChallenge, createChallenge } from './challenge'
 import { AppConfig } from './config'
+import { ApprovalRequests } from './database/ApprovalRequests'
 import { runQuery } from './database/Database'
-import {
-    getReportsRows,
-    getRulesRows,
-    insertApprovalRequestsRow,
-    insertReportsRow,
-    insertRulesRow
-} from './database/Schema'
+import { Reports } from './database/Reports'
+import { Rules } from './database/Rules'
 import { logger } from './logger'
 import { register } from './metrics'
 import { createProxyEndpoints } from './proxy'
@@ -93,7 +89,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
             res.sendStatus(400)
             return
         }
-        await insertApprovalRequestsRow({ hash: Types.asString(hash), ens: Types.asNullable(Types.asString, ens) })
+        await ApprovalRequests.insert({ hash: Types.asString(hash), ens: Types.asNullable(Types.asString, ens) })
         res.sendStatus(200)
     })
 
@@ -104,7 +100,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
             res.sendStatus(400)
             return
         }
-        await insertReportsRow({ hash: Types.asString(hash), reason })
+        await Reports.insert({ hash: Types.asString(hash), reason })
         res.sendStatus(200)
     })
 
@@ -123,8 +119,8 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
     }
 
     app.get('/moderation', moderationGuard, async (req, res) => {
-        const reports = await getReportsRows()
-        const rules = await getRulesRows()
+        const reports = await Reports.getMany()
+        const rules = await Rules.getMany()
 
         res.send({ reports, rules })
     })
@@ -132,14 +128,14 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
     app.post('/moderation/allow', moderationGuard, async (req, res) => {
         const json = JSON.parse(req.body.toString())
         const { hash } = json
-        await insertRulesRow({ hash: Types.asString(hash), mode: 'allow' })
+        await Rules.insert({ hash: Types.asString(hash), mode: 'allow' })
         res.sendStatus(200)
     })
 
     app.post('/moderation/deny', moderationGuard, async (req, res) => {
         const json = JSON.parse(req.body.toString())
         const { hash } = json
-        await insertRulesRow({ hash: Types.asString(hash), mode: 'allow' })
+        await Rules.insert({ hash: Types.asString(hash), mode: 'allow' })
         res.sendStatus(200)
     })
 

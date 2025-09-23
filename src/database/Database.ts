@@ -103,3 +103,27 @@ export async function update(
     const affectedRows = Types.asNumber(y.affectedRows)
     return affectedRows
 }
+
+export type SelectOptions<T> = {
+    order?: { column: keyof T; direction: 'ASC' | 'DESC' }
+    limit?: number
+    offset?: number
+}
+
+export function buildSelect<T>(filter?: Partial<T>, options?: SelectOptions<T>): [string, unknown[]] {
+    const where = filter
+        ? ' WHERE ' +
+          Object.keys(filter)
+              .map(x => '' + x + ' = ?')
+              .join(' AND ')
+        : ''
+    const values = filter ? Object.values(filter) : []
+    const order = options?.order ? ' ORDER BY ' + (options.order.column as string) + ' ' + options.order.direction : ''
+    const limit = options?.limit ? ' LIMIT ' + options.limit : ''
+    const offset = options?.offset ? ' OFFSET ' + options.offset : ''
+    return [where + order + limit + offset, values]
+}
+
+export async function closeDatabase() {
+    await pool.end()
+}

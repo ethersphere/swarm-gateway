@@ -1,10 +1,5 @@
 import { Binary, Strings } from 'cafe-utility'
-import {
-    ChallengesRowId,
-    getOnlyChallengesRowOrThrow,
-    insertChallengesRow,
-    updateChallengesRow
-} from './database/Schema'
+import { Challenges, ChallengesRowId } from './database/Challenges'
 
 type Challenge = {
     id: number
@@ -15,12 +10,12 @@ type Challenge = {
 export async function createChallenge(): Promise<Challenge> {
     const difficulty = 3
     const nonce = Strings.randomHex(64)
-    const id = await insertChallengesRow({ difficulty, nonce })
+    const id = await Challenges.insert({ difficulty, nonce })
     return { id, difficulty, nonce }
 }
 
 export async function checkChallenge(challengeId: ChallengesRowId, challengeSolution: string) {
-    const challenge = await getOnlyChallengesRowOrThrow({ id: challengeId })
+    const challenge = await Challenges.getOneOrThrow({ id: challengeId })
     if (challenge.solution) {
         return false
     }
@@ -29,7 +24,7 @@ export async function checkChallenge(challengeId: ChallengesRowId, challengeSolu
     )
     const resultHex = Binary.uint8ArrayToHex(result)
     if (resultHex.startsWith('0'.repeat(challenge.difficulty))) {
-        await updateChallengesRow(challenge.id, { solution: challengeSolution })
+        await Challenges.update(challenge.id, { solution: challengeSolution })
     } else {
         return false
     }
