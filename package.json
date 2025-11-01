@@ -8,10 +8,10 @@
     },
     "license": "BSD-3-Clause",
     "dependencies": {
-        "@ethersphere/bee-js": "^9.8.1",
-        "axios": "^0.30.0",
+        "@ethersphere/bee-js": "^10.1.1",
+        "axios": "^0.30.2",
         "body-parser": "^1.20.3",
-        "cafe-utility": "^31.1.1",
+        "cafe-utility": "^33.3.1",
         "express": "^4.21.2",
         "mysql2": "^3.14.0",
         "prom-client": "^14.1.0",
@@ -20,8 +20,8 @@
     },
     "devDependencies": {
         "@types/express": "^4.17.14",
-        "@types/node": "^18.7.23",
+        "@types/node": "^24.9.2",
         "@types/request-stats": "^3.0.0",
-        "typescript": "^5.8.2"
+        "typescript": "^5.9.3"
     }
 }
