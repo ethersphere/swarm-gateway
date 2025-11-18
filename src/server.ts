@@ -28,7 +28,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
         res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         res.set(
             'Access-Control-Allow-Headers',
-            'Content-Type, Authorization, swarm-postage-batch-id, swarm-deferred-upload, swarm-index-document, swarm-error-document, swarm-collection'
+            'Content-Type, Authorization, swarm-postage-batch-id, swarm-postage-stamp, swarm-deferred-upload, swarm-index-document, swarm-error-document, swarm-collection'
         )
 
         if (req.method === 'OPTIONS') {
