@@ -13,7 +13,7 @@
         "body-parser": "^1.20.3",
         "cafe-utility": "^33.3.1",
         "express": "^4.21.2",
-        "mysql2": "^3.14.0",
+        "mysql2": "^3.15.3",
         "prom-client": "^14.1.0",
         "request-stats": "^3.0.0",
         "winston": "^3.8.2"
