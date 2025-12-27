@@ -12,7 +12,7 @@
         "axios": "^0.30.2",
         "body-parser": "^1.20.3",
         "cafe-utility": "^33.3.1",
-        "express": "^4.21.2",
+        "express": "^4.22.1",
         "mysql2": "^3.14.0",
         "prom-client": "^14.1.0",
         "request-stats": "^3.0.0",
