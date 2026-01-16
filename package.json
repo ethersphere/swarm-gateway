@@ -8,7 +8,7 @@
     },
     "license": "BSD-3-Clause",
     "dependencies": {
-        "@ethersphere/bee-js": "^10.1.1",
+        "@ethersphere/bee-js": "^10.4.0",
         "axios": "^0.30.2",
         "body-parser": "^1.20.4",
         "cafe-utility": "^33.3.1",
