@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS: SettingsRow = {
 
 const BAD_PATH = `bzz/${'00'.repeat(32)}`
 const SWARM_STAMP_HEADER = 'swarm-postage-batch-id'
+const SWARM_PRESIGNED_HEADER = 'swarm-postage-stamp'
 const SWARM_PIN_HEADER = 'swarm-pin'
 
 interface Options {
@@ -91,7 +92,7 @@ async function fetchAndRespond(
     }
 
     try {
-        if (method === 'POST' && options.stampManager.enabled) {
+        if (method === 'POST' && !headers[SWARM_PRESIGNED_HEADER] && options.stampManager.enabled) {
             headers[SWARM_STAMP_HEADER] = options.stampManager.getPostageStamp()
         }
         if (body && Buffer.isBuffer(body)) {
