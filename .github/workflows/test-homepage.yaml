@@ -1,0 +1,41 @@
+name: Test Homepage
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - '**'
+
+jobs:
+    test-homepage:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 18
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Build
+              run: npm run build
+
+            - name: Run bee-dev
+              run: npx bee-dev &
+
+            - name: Wait for bee-dev
+              run: npx npxie await http://localhost:1633/stamps
+
+            - name: Run gateway
+              run: |
+                  export DATABASE_CONFIG="{}"
+                  export TEMPORARY=5
+                  export HOMEPAGE=9461d23ca46636017661ee124bc82109edba3312bfe0510ffc7eeaa562383ec2
+                  node dist > gateway.log 2>&1 < /dev/null &
+
+            - name: Check image/jpeg content-type
+              run: npx npxie content-type-is http://localhost:3000 "image/jpeg"
