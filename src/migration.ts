@@ -3,8 +3,8 @@ import { getOnlyRowOrThrow, runQuery } from './database/Database'
 import { logger } from './logger'
 
 export async function runMigrations() {
-    if (process.env.DATABASE_CONFIG === '{}') {
-        logger.info('skipping migrations, DATABASE_CONFIG is empty')
+    if (!process.env.DATABASE_CONFIG || process.env.DATABASE_CONFIG === '{}') {
+        logger.info('skipping migrations, DATABASE_CONFIG is not set')
         return
     }
 

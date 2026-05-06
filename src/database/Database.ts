@@ -1,13 +1,18 @@
 import { Arrays, Objects, Types } from 'cafe-utility'
 import { createPool } from 'mysql2/promise'
 
-const databaseConfig = JSON.parse(Types.asString(process.env.DATABASE_CONFIG, { name: 'DATABASE_CONFIG' }))
+const rawConfig = process.env.DATABASE_CONFIG
 
-if (process.env.DATABASE_PASSWORD) {
-    databaseConfig.password = Types.asString(process.env.DATABASE_PASSWORD, { name: 'DATABASE_PASSWORD' })
-}
-
-const pool = createPool(databaseConfig)
+const pool =
+    rawConfig && rawConfig !== '{}'
+        ? (() => {
+              const databaseConfig = JSON.parse(rawConfig)
+              if (process.env.DATABASE_PASSWORD) {
+                  databaseConfig.password = Types.asString(process.env.DATABASE_PASSWORD, { name: 'DATABASE_PASSWORD' })
+              }
+              return createPool(databaseConfig)
+          })()
+        : null
 
 const λ = Arrays.makePipe
 
@@ -26,6 +31,7 @@ const _getAsId = λ([Types.asArray, Arrays.firstOrThrow, Arrays.firstOrThrow, Ob
 const _getAsNullableString = λ([Types.asArray, Arrays.firstOrThrow, Objects.unwrapSingleKey], Types.asNullableString)
 
 export async function runQuery(query: string, ...params: unknown[]) {
+    if (!pool) throw new Error('Database not configured')
     return pool.query(query, params)
 }
 
@@ -125,5 +131,5 @@ export function buildSelect<T>(filter?: Partial<T>, options?: SelectOptions<T>):
 }
 
 export async function closeDatabase() {
-    await pool.end()
+    await pool?.end()
 }

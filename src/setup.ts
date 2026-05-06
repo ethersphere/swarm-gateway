@@ -2,8 +2,8 @@ import { getRows, runQuery } from './database/Database'
 import { logger } from './logger'
 
 export async function setupSchema() {
-    if (process.env.DATABASE_CONFIG === '{}') {
-        logger.info('skipping schema setup, DATABASE_CONFIG is empty')
+    if (!process.env.DATABASE_CONFIG || process.env.DATABASE_CONFIG === '{}') {
+        logger.info('skipping schema setup, DATABASE_CONFIG is not set')
         return
     }
 
