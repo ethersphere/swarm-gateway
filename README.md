@@ -66,5 +66,5 @@ When `HOSTNAME` is set, the gateway resolves subdomains against the Bee node:
 | LOG_LEVEL                 | `info`                    | Log verbosity: `critical`, `error`, `warn`, `info`, `verbose`, or `debug`               |
 | HOMEPAGE                  | —                         | Swarm hash of a site to serve at the root path                                          |
 | POST_SIZE_LIMIT           | `1gb`                     | Maximum POST body size                                                                  |
-| DATABASE_CONFIG           | —                         | MySQL connection as JSON: `{"user":"","password":"","host":"","port":3306,"database":"","ssl":{"ca":"..."}}` |
+| DATABASE_CONFIG           | —                         | MySQL connection as JSON: `{"user":"","password":"","host":"","port":3306,"database":"","ssl":{"ca":"..."}}`. If unset, all database-backed features are disabled. |
 | DATABASE_PASSWORD         | —                         | MySQL password (overrides the `password` field in `DATABASE_CONFIG`)                    |
