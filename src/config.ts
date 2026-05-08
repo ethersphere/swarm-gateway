@@ -19,6 +19,7 @@ export interface ServerConfig {
 
 export interface StampConfig {
     hardcodedStamp?: string
+    hardcodedStampSoc?: string
     postageDepth?: number
     postageAmount?: number
     postageThresholdUsage: number
@@ -47,6 +48,7 @@ export type EnvironmentVariables = Partial<{
 
     // Stamps
     POSTAGE_STAMP: string
+    POSTAGE_STAMP_SOC: string
     POSTAGE_DEPTH: string
     POSTAGE_AMOUNT: string
     POSTAGE_THRESHOLD_USAGE: string
@@ -91,6 +93,7 @@ export function getServerConfig(env: EnvironmentVariables): ServerConfig {
 export function getStampConfig(env: EnvironmentVariables): StampConfig {
     return {
         hardcodedStamp: env.POSTAGE_STAMP || '',
+        hardcodedStampSoc: env.POSTAGE_STAMP_SOC || '',
         postageAmount: Types.asOptional(Types.asNumber, env.POSTAGE_AMOUNT),
         postageDepth: Types.asOptional(Types.asNumber, env.POSTAGE_DEPTH),
         postageThresholdSeconds:

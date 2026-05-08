@@ -69,6 +69,7 @@ export class StampManager {
     private bee: Bee
     private config: StampConfig
     private stamp?: BatchId
+    private stampSoc?: BatchId
 
     public enabled: boolean = false
 
@@ -78,6 +79,10 @@ export class StampManager {
     }
 
     async start() {
+        if (this.config.hardcodedStampSoc) {
+            this.stampSoc = new BatchId(this.config.hardcodedStampSoc)
+            logger.info('enabled SOC stamp manager with hardcoded stamp')
+        }
         if (this.config.hardcodedStamp) {
             this.enabled = true
             this.stamp = new BatchId(this.config.hardcodedStamp)
@@ -97,8 +102,12 @@ export class StampManager {
         }
     }
 
-    getPostageStamp(): string {
+    getPostageStamp(soc = false): string {
         stampGetCounter.inc()
+
+        if (soc && this.stampSoc) {
+            return this.stampSoc.toHex()
+        }
 
         if (this.stamp) {
             return this.stamp.toHex()

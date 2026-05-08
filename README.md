@@ -58,6 +58,7 @@ When `HOSTNAME` is set, the gateway resolves subdomains against the Bee node:
 | INSTANCE_NAME             | —                         | Instance name used to look up moderation settings from the database                     |
 | REMOVE_PIN_HEADER         | `true`                    | Strip the `swarm-pin` header from proxied requests                                      |
 | POSTAGE_STAMP             | —                         | Hardcoded postage batch ID to use for all uploads                                       |
+| POSTAGE_STAMP_SOC         | —                         | Hardcoded postage batch ID to use for `POST /soc/*` uploads (falls back to `POSTAGE_STAMP` if unset) |
 | POSTAGE_DEPTH             | —                         | Batch depth for autobuy (required for autobuy)                                          |
 | POSTAGE_AMOUNT            | —                         | Batch amount for autobuy (required for autobuy)                                         |
 | POSTAGE_THRESHOLD_USAGE   | `0.85`                    | Buy a new batch when usage of the current one exceeds this fraction                     |
