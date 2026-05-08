@@ -1,0 +1,48 @@
+name: Test TLS Check
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - '**'
+
+jobs:
+    test-tls-check:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 18
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Build
+              run: npm run build
+
+            - name: Run bee-dev
+              run: npx bee-dev &
+
+            - name: Wait for bee-dev
+              run: npx npxie await http://localhost:1633/stamps
+
+            - name: Run gateway
+              run: |
+                  export HOSTNAME=bzz.limo
+                  node dist > gateway.log 2>&1 < /dev/null &
+
+            - name: Expect 200 for exact hostname
+              run: npx npxie code-equals "http://localhost:3000/tls-check?domain=bzz.limo" 200
+
+            - name: Expect 200 for single subdomain
+              run: npx npxie code-equals "http://localhost:3000/tls-check?domain=swarm.bzz.limo" 200
+
+            - name: Expect 200 for nested subdomain
+              run: npx npxie code-equals "http://localhost:3000/tls-check?domain=book.swarm.bzz.limo" 200
+
+            - name: Expect 403 for unrelated domain
+              run: npx npxie code-equals "http://localhost:3000/tls-check?domain=evil.com" 403
