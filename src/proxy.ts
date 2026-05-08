@@ -93,7 +93,7 @@ async function fetchAndRespond(
 
     try {
         if (method === 'POST' && !headers[SWARM_PRESIGNED_HEADER] && options.stampManager.enabled) {
-            headers[SWARM_STAMP_HEADER] = options.stampManager.getPostageStamp()
+            headers[SWARM_STAMP_HEADER] = options.stampManager.getPostageStamp(path.startsWith('/soc/'))
         }
         if (body && Buffer.isBuffer(body)) {
             body = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength)
