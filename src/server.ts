@@ -68,6 +68,14 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
 
     app.get('/health', (_req, res) => res.sendStatus(200))
 
+    if (config.hostname) {
+        app.get('/tls-check', (req, res) => {
+            const domain = req.query.domain as string
+            const valid = domain === config.hostname || domain.endsWith(`.${config.hostname}`)
+            res.sendStatus(valid ? 200 : 403)
+        })
+    }
+
     app.get('/readiness', async (_req, res) => {
         const ready = await checkReadiness(bee)
 
