@@ -86,6 +86,16 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
         }
     })
 
+    app.get('/batches', async (_req, res) => {
+        try {
+            const batches = await bee.getGlobalPostageBatches()
+            res.send(batches)
+        } catch (error) {
+            logger.error('failed to fetch batches', error)
+            res.sendStatus(500)
+        }
+    })
+
     app.post('/challenge', async (req, res) => {
         res.send(await createChallenge())
     })
