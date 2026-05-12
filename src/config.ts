@@ -10,6 +10,7 @@ export interface AppConfig {
     removePinHeader?: boolean
     readinessCheck?: boolean
     homepage?: string
+    mattermostWebhookUrl?: string
 }
 
 export interface ServerConfig {
@@ -57,6 +58,8 @@ export type EnvironmentVariables = Partial<{
 
     // Homepage
     HOMEPAGE: string
+
+    MATTERMOST_WEBHOOK_URL: string
 }>
 
 export const SUPPORTED_LEVELS = ['critical', 'error', 'warn', 'info', 'verbose', 'debug'] as const
@@ -82,7 +85,8 @@ export function getAppConfig(env: EnvironmentVariables): AppConfig {
         moderationSecret: env.MODERATION_SECRET,
         instanceName: env.INSTANCE_NAME,
         removePinHeader: env.REMOVE_PIN_HEADER ? env.REMOVE_PIN_HEADER === 'true' : true,
-        homepage: env.HOMEPAGE
+        homepage: env.HOMEPAGE,
+        mattermostWebhookUrl: env.MATTERMOST_WEBHOOK_URL,
     }
 }
 

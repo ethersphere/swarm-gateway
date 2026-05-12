@@ -14,6 +14,7 @@ import { register } from './metrics'
 import { createProxyEndpoints } from './proxy'
 import { checkReadiness } from './readiness'
 import { StampManager } from './stamp'
+import { sendMattermostAlert } from './services/mattermost'
 
 export function createApp(config: AppConfig, stampManager: StampManager): Application {
     const bee = new Bee(config.beeApiUrl)
@@ -86,7 +87,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
         }
     })
 
-    app.post('/challenge', async (req, res) => {
+    app.post('/challenge', async (_req, res) => {
         res.send(await createChallenge())
     })
 
@@ -98,6 +99,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
             return
         }
         await ApprovalRequests.insert({ hash: Types.asString(hash), ens: Types.asNullable(Types.asString, ens) })
+        await sendMattermostAlert(`### New moderation approval request\n**Hash**: ${hash}\n**ENS**: ${ens || 'N/A'}`)
         res.sendStatus(200)
     })
 
@@ -126,7 +128,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
         next()
     }
 
-    app.get('/moderation', moderationGuard, async (req, res) => {
+    app.get('/moderation', moderationGuard, async (_req, res) => {
         const reports = await Reports.getMany()
         const rules = await Rules.getMany()
 
