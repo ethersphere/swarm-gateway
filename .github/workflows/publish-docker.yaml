@@ -1,4 +1,4 @@
-name: Publish on dockerhub and quay.io
+name: Publish on dockerhub
 
 on:
     push:
@@ -11,17 +11,12 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v4
-            - name: Login to Docker and Quay
-              if: success()
+            - name: Login to Docker Hub
               run: |
                   printf ${{ secrets.DOCKERHUB_PASSWORD }} | docker login --username ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-                  printf ${{ secrets.QUAY_PASSWORD }} | docker login --username ${{ secrets.QUAY_USERNAME }} quay.io --password-stdin
                   TAG=$(git describe --tags --always)
                   echo TAG=${TAG##v} >> $GITHUB_ENV
-            - name: Build image, retag and push
-              if: success()
+            - name: Build and push
               run: |
                   docker build -t ethersphere/swarm-gateway:${TAG} .
-                  docker tag ethersphere/swarm-gateway:${TAG} quay.io/ethersphere/swarm-gateway:${TAG}
                   docker push ethersphere/swarm-gateway:${TAG}
-                  docker push quay.io/ethersphere/swarm-gateway:${TAG}
