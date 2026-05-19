@@ -69,3 +69,4 @@ When `HOSTNAME` is set, the gateway resolves subdomains against the Bee node:
 | POST_SIZE_LIMIT           | `1gb`                     | Maximum POST body size                                                                  |
 | DATABASE_CONFIG           | —                         | MySQL connection as JSON: `{"user":"","password":"","host":"","port":3306,"database":"","ssl":{"ca":"..."}}`. If unset, all database-backed features are disabled. |
 | DATABASE_PASSWORD         | —                         | MySQL password (overrides the `password` field in `DATABASE_CONFIG`)                    |
+| MATTERMOST_WEBHOOK_URL    | —                         | URL of the Mattermost incoming webhook used for alerts                                  |
