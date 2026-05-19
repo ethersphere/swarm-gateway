@@ -10,5 +10,7 @@ export async function sendMattermostAlert(text: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
     signal: AbortSignal.timeout(10_000)
+  }).catch((error) => {
+    console.error('Failed to send Mattermost alert:', error)
   })
 }
