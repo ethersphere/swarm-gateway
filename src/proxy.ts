@@ -244,6 +244,17 @@ async function fetchAndRespond(
             return
         }
 
+        if (method === 'POST' && (path === '/bytes' || path === '/bzz') && response.status >= 200 && response.status < 300) {
+            try {
+                const json = JSON.parse(Buffer.from(response.data).toString('utf8'))
+                if (json.reference) {
+                    logger.info('upload', { path, reference: json.reference })
+                }
+            } catch {
+                // response is not JSON
+            }
+        }
+
         delete response.headers['content-length']
         delete response.headers['content-encoding']
         delete response.headers['transfer-encoding']
