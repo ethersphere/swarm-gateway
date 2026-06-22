@@ -1,6 +1,11 @@
 import { Duration } from '@ethersphere/bee-js'
 import { Types } from 'cafe-utility'
 
+export enum ReadinessMode {
+    Strict = 'strict',
+    Normal = 'normal'
+}
+
 export interface AppConfig {
     beeApiUrl: string
     hostname: string
@@ -8,7 +13,7 @@ export interface AppConfig {
     instanceName?: string
     moderationSecret?: string
     removePinHeader?: boolean
-    readinessCheck?: boolean
+    readinessMode?: ReadinessMode
     homepage?: string
     mattermostWebhookUrl?: string
 }
@@ -39,6 +44,7 @@ export type EnvironmentVariables = Partial<{
     // Server
     PORT: string
     HOSTNAME: string
+    READINESS_MODE: ReadinessMode
 
     // Moderation
     MODERATION_SECRET: string
@@ -87,6 +93,7 @@ export function getAppConfig(env: EnvironmentVariables): AppConfig {
         removePinHeader: env.REMOVE_PIN_HEADER ? env.REMOVE_PIN_HEADER === 'true' : true,
         homepage: env.HOMEPAGE,
         mattermostWebhookUrl: env.MATTERMOST_WEBHOOK_URL,
+        readinessMode: env.READINESS_MODE === ReadinessMode.Strict ? ReadinessMode.Strict : ReadinessMode.Normal
     }
 }
 

@@ -4,7 +4,7 @@ import bodyParser from 'body-parser'
 import { Arrays, Strings, Types } from 'cafe-utility'
 import express, { Application, NextFunction, Request, Response } from 'express'
 import { checkChallenge, createChallenge } from './challenge'
-import { AppConfig } from './config'
+import { AppConfig, ReadinessMode } from './config'
 import { ApprovalRequests } from './database/ApprovalRequests'
 import { runQuery } from './database/Database'
 import { Reports } from './database/Reports'
@@ -78,7 +78,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
     }
 
     app.get('/readiness', async (_req, res) => {
-        const ready = await checkReadiness(bee)
+        const ready = await checkReadiness(bee, config.readinessMode === ReadinessMode.Strict)
 
         if (ready) {
             res.sendStatus(200)

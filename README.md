@@ -70,6 +70,7 @@ When `HOSTNAME` is set, the gateway resolves subdomains against the Bee node:
 | DATABASE_CONFIG           | —                         | MySQL connection as JSON: `{"user":"","password":"","host":"","port":3306,"database":"","ssl":{"ca":"..."}}`. If unset, all database-backed features are disabled. |
 | DATABASE_PASSWORD         | —                         | MySQL password (overrides the `password` field in `DATABASE_CONFIG`)                    |
 | MATTERMOST_WEBHOOK_URL    | —                         | URL of the Mattermost incoming webhook used for alerts                                  |
+| READINESS_MODE            | `normal`                  | `normal`: check only Bee readiness, `strict`: check Bee readiness and Bee depth         |
 
 ## Maintainers
 
