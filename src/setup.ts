@@ -111,7 +111,7 @@ export async function setupSchema() {
       continue
     }
     logger.debug(`reating table ${tableName}`)
-    await runQuery(sql)
+    await runQuery(sql!)
   }
   for (const [tableName, keyName, sql] of uniqueKeys) {
     const rows = await getRows(`SHOW INDEX FROM ${tableName} WHERE Key_name = '${keyName}'`)
@@ -120,6 +120,6 @@ export async function setupSchema() {
       continue
     }
     logger.debug(`creating unique key ${keyName}`)
-    await runQuery(sql)
+    await runQuery(sql!)
   }
 }

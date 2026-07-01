@@ -13,8 +13,8 @@ import { logger } from './logger'
 import { register } from './metrics'
 import { createProxyEndpoints } from './proxy'
 import { checkReadiness } from './readiness'
-import { StampManager } from './stamp'
 import { sendMattermostAlert } from './services/mattermost'
+import { StampManager } from './stamp'
 
 export function createApp(config: AppConfig, stampManager: StampManager): Application {
   const bee = new Bee(config.beeApiUrl)

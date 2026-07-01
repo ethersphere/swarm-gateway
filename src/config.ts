@@ -9,12 +9,12 @@ export enum ReadinessMode {
 export interface AppConfig {
   beeApiUrl: string
   hostname: string
-  authorization?: string
-  instanceName?: string
-  moderationSecret?: string
-  removePinHeader?: boolean
-  readinessMode?: ReadinessMode
-  homepage?: string
+  authorization?: string | undefined
+  instanceName?: string | undefined
+  moderationSecret?: string | undefined
+  removePinHeader?: boolean | undefined
+  readinessMode?: ReadinessMode | undefined
+  homepage?: string | undefined
   mattermostWebhookUrl?: string
 }
 
@@ -24,10 +24,10 @@ export interface ServerConfig {
 }
 
 export interface StampConfig {
-  hardcodedStamp?: string
-  hardcodedStampSoc?: string
-  postageDepth?: number
-  postageAmount?: number
+  hardcodedStamp?: string | undefined
+  hardcodedStampSoc?: string | undefined
+  postageDepth?: number | undefined
+  postageAmount?: number | undefined
   postageThresholdUsage: number
   postageThresholdSeconds: number
   postageKeepAlive: boolean
@@ -87,12 +87,12 @@ export function getAppConfig(env: EnvironmentVariables): AppConfig {
   return {
     hostname: env.HOSTNAME || DEFAULT_HOSTNAME,
     beeApiUrl: env.BEE_API_URL || DEFAULT_BEE_API_URL,
-    authorization: env.AUTH_SECRET,
-    moderationSecret: env.MODERATION_SECRET,
-    instanceName: env.INSTANCE_NAME,
+    authorization: env.AUTH_SECRET || '',
+    moderationSecret: env.MODERATION_SECRET || '',
+    instanceName: env.INSTANCE_NAME || '',
     removePinHeader: env.REMOVE_PIN_HEADER ? env.REMOVE_PIN_HEADER === 'true' : true,
-    homepage: env.HOMEPAGE,
-    mattermostWebhookUrl: env.MATTERMOST_WEBHOOK_URL,
+    homepage: env.HOMEPAGE || '',
+    mattermostWebhookUrl: env.MATTERMOST_WEBHOOK_URL || '',
     readinessMode: env.READINESS_MODE === ReadinessMode.Strict ? ReadinessMode.Strict : ReadinessMode.Normal,
   }
 }
