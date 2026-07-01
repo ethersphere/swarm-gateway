@@ -31,7 +31,7 @@ const SWARM_PIN_HEADER = 'swarm-pin'
 interface Options {
   beeApiUrl: string
   removePinHeader: boolean
-  instanceName?: string
+  instanceName?: string | undefined
   stampManager: StampManager
   hostname?: string
 }
