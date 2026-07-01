@@ -1,4 +1,4 @@
-import { EnvironmentVariables, getAppConfig } from "../config";
+import { EnvironmentVariables, getAppConfig } from '../config'
 
 export async function sendMattermostAlert(text: string) {
   const appConfig = getAppConfig(process.env as EnvironmentVariables)
@@ -9,8 +9,8 @@ export async function sendMattermostAlert(text: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
-    signal: AbortSignal.timeout(10_000)
-  }).catch((error) => {
+    signal: AbortSignal.timeout(10_000),
+  }).catch(error => {
     console.error('Failed to send Mattermost alert:', error)
   })
 }
