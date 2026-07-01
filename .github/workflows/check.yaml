@@ -1,0 +1,46 @@
+name: Check
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [16.x]
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Commit linting
+        uses: wagoid/commitlint-github-action@v2
+
+      - name: Dependency check
+        run: npm run depcheck
+
+      - name: Check typings
+        run: npm run check
+
+      - name: Check build
+        run: npm run build
+
+      - name: Code formatting check
+        run: npm run format:check
+        env:
+          CI: true
