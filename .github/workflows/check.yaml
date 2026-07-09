@@ -1,0 +1,42 @@
+name: Check
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Commit linting
+        uses: wagoid/commitlint-github-action@v6
+
+      - name: Dependency check
+        run: npm run depcheck
+
+      - name: Check typings
+        run: npm run check
+
+      - name: Check build
+        run: npm run build
+
+      - name: Code formatting check
+        run: npm run format:check
+        env:
+          CI: true
