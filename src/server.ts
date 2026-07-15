@@ -22,7 +22,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
 
   const postSizeLimit = Arrays.getArgument(process.argv, 'post-size-limit', process.env, 'POST_SIZE_LIMIT') || '1gb'
 
-  app.use(bodyParser.raw({ inflate: true, limit: postSizeLimit, type: '*/*' }))
+  app.use(bodyParser.raw({ inflate: true, limit: postSizeLimit, type: () => true }))
 
   app.use((req, res, next) => {
     res.set('Access-Control-Allow-Origin', '*')
