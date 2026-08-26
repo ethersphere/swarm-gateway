@@ -122,7 +122,7 @@ export class StampManager {
     const depth = Types.asNumber(this.config.postageDepth)
 
     stampCheckCounter.inc()
-    const stamps = (await this.bee.getAllPostageBatch()).filter(
+    const stamps = (await this.bee.stamp.getAll()).filter(
       x => x.usable && x.depth === this.config.postageDepth && x.usage < this.config.postageThresholdUsage,
     )
     logger.debug('valid stamps', stamps)
@@ -134,20 +134,20 @@ export class StampManager {
       this.stamp = stamp.batchID
     }
 
-    let currentStamp = await this.bee.getPostageBatch(this.stamp)
+    let currentStamp = await this.bee.stamp.get(this.stamp)
 
     if (currentStamp.usage >= this.config.postageThresholdUsage) {
       this.stamp = await this.buyStamp(amount, depth, 'current stamp is used up')
-      currentStamp = await this.bee.getPostageBatch(this.stamp)
+      currentStamp = await this.bee.stamp.get(this.stamp)
     }
 
     if (currentStamp.duration.toSeconds() < this.config.postageThresholdSeconds) {
       if (this.config.postageKeepAlive) {
         await this.topup(this.stamp, amount)
-        currentStamp = await this.bee.getPostageBatch(this.stamp)
+        currentStamp = await this.bee.stamp.get(this.stamp)
       } else {
         this.stamp = await this.buyStamp(amount, depth, 'current stamp is about to expire')
-        currentStamp = await this.bee.getPostageBatch(this.stamp)
+        currentStamp = await this.bee.stamp.get(this.stamp)
       }
     }
 
@@ -159,7 +159,7 @@ export class StampManager {
   async topup(batchId: BatchId, amount: number): Promise<void> {
     try {
       logger.info(`topping up stamp ${batchId.toHex()} with ${amount}`)
-      await this.bee.topUpBatch(batchId, amount.toString())
+      await this.bee.stamp.topUp(batchId, amount.toString())
       stampTopupCounter.inc()
     } catch (error) {
       stampPurchaseTopupCounter.inc()
@@ -170,7 +170,7 @@ export class StampManager {
   async buyStamp(amount: number, depth: number, reason: string): Promise<BatchId> {
     try {
       logger.info(`buying new stamp with amount ${amount} and depth ${depth}, reason: ${reason}`)
-      const batchId = await this.bee.createPostageBatch(amount.toString(), depth)
+      const batchId = await this.bee.stamp.create(amount.toString(), depth)
       logger.info('successfully bought new stamp', batchId.toHex())
       stampPurchaseCounter.inc()
       return batchId
