@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <link rel="icon" href="/favicon.ico" />
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <meta name="theme-color" content="#f9f9f9" />
+        <title>Moderation</title>
+        <link rel="stylesheet" href="/app.css" />
+    </head>
+    <body>
+        <video autoplay muted>
+            <source src="/background.mp4" type="video/mp4" />
+        </video>
+        <img class="logo" src="/logo.svg" />
+        <div class="card">
+            <section id="loading">
+                <h1 class="welcome">Moderation</h1>
+                <p class="explanation">Loading…</p>
+            </section>
+
+            <section id="login" hidden>
+                <h1 class="welcome">Moderation</h1>
+                <p class="explanation">Sign in to review pending approval requests.</p>
+                <form id="loginForm" class="login-form">
+                    <div class="input">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" autocomplete="username" />
+                    </div>
+                    <div class="input">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" autocomplete="current-password" />
+                    </div>
+                    <button type="submit">Sign in</button>
+                </form>
+            </section>
+
+            <section id="pending" hidden class="gap-20">
+                <div class="toolbar">
+                    <h1 class="welcome">Pending requests</h1>
+                    <button id="signOut" class="secondary">Sign out</button>
+                </div>
+                <p class="footnote" id="signedInAs"></p>
+                <div id="requests"></div>
+            </section>
+        </div>
+        <footer>
+            <hr class="separator" />
+            <ul class="links">
+                <li><a class="link" href="https://ethswarm.org/">Swarm Website</a></li>
+                <li><a class="link" href="https://ethswarm.org/faq">FAQ</a></li>
+                <li><a class="link" href="https://discord.gg/wdghaQsGq5">Discord</a></li>
+                <li><a class="link" href="https://github.com/ethersphere">Github</a></li>
+            </ul>
+        </footer>
+
+        <div id="modal" class="modal" hidden>
+            <div class="modal-card">
+                <h2 id="modalTitle"></h2>
+                <p id="modalText"></p>
+                <code id="modalHash"></code>
+                <div class="modal-actions">
+                    <button id="modalCancel" class="secondary">Cancel</button>
+                    <button id="modalConfirm">Confirm</button>
+                </div>
+            </div>
+        </div>
+
+        <script src="/snackbar.js"></script>
+        <script>
+            const sections = {
+                loading: document.getElementById('loading'),
+                login: document.getElementById('login'),
+                pending: document.getElementById('pending')
+            }
+
+            function show(name) {
+                for (const [key, node] of Object.entries(sections)) {
+                    node.hidden = key !== name
+                }
+            }
+
+            function describeWait(seconds) {
+                if (!seconds) {
+                    return 'a moment'
+                }
+                if (seconds < 60) {
+                    return `${seconds} second${seconds === 1 ? '' : 's'}`
+                }
+                const minutes = Math.ceil(seconds / 60)
+                if (minutes < 60) {
+                    return `${minutes} minute${minutes === 1 ? '' : 's'}`
+                }
+                const hours = Math.ceil(minutes / 60)
+                return `${hours} hour${hours === 1 ? '' : 's'}`
+            }
+
+            function showLogin() {
+                document.getElementById('password').value = ''
+                show('login')
+                document.getElementById('username').focus()
+            }
+
+            document.getElementById('loginForm').addEventListener('submit', async event => {
+                event.preventDefault()
+                const username = document.getElementById('username').value
+                const password = document.getElementById('password').value
+                if (!username || !password) {
+                    snackbar('Please enter your username and password.', 'error')
+                    return
+                }
+                try {
+                    const response = await fetch('/moderation/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    })
+                    if (response.status === 200) {
+                        document.getElementById('password').value = ''
+                        loadPending(await response.json())
+                    } else if (response.status === 429) {
+                        const { retryAfterSeconds } = await response.json().catch(() => ({}))
+                        snackbar(`Too many failed attempts. Try again in ${describeWait(retryAfterSeconds)}.`, 'error')
+                    } else {
+                        snackbar('Invalid username or password.', 'error')
+                    }
+                } catch (error) {
+                    console.error('Error signing in:', error)
+                    snackbar('An error occurred while signing in.', 'error')
+                }
+            })
+
+            function confirmAction(hash, mode) {
+                return new Promise(resolve => {
+                    const modal = document.getElementById('modal')
+                    document.getElementById('modalTitle').textContent =
+                        mode === 'allow' ? 'Accept this content?' : 'Deny this content?'
+                    document.getElementById('modalText').textContent =
+                        mode === 'allow'
+                            ? 'The gateway will serve this content from now on.'
+                            : 'The gateway will refuse to serve this content from now on.'
+                    document.getElementById('modalHash').textContent = hash
+                    modal.hidden = false
+
+                    function close(result) {
+                        modal.hidden = true
+                        document.getElementById('modalConfirm').onclick = null
+                        document.getElementById('modalCancel').onclick = null
+                        resolve(result)
+                    }
+
+                    document.getElementById('modalConfirm').onclick = () => close(true)
+                    document.getElementById('modalCancel').onclick = () => close(false)
+                })
+            }
+
+            async function decide(hash, mode) {
+                if (!(await confirmAction(hash, mode))) {
+                    return
+                }
+                try {
+                    const response = await fetch(`/moderation/${mode}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ hash })
+                    })
+                    if (response.status === 200) {
+                        snackbar(mode === 'allow' ? 'Content accepted.' : 'Content denied.', 'success')
+                        loadPending()
+                    } else if (response.status === 401) {
+                        snackbar('Your session expired. Please sign in again.', 'error')
+                        showLogin()
+                    } else {
+                        snackbar('Failed to save the decision. Please try again.', 'error')
+                    }
+                } catch (error) {
+                    console.error('Error saving decision:', error)
+                    snackbar('An error occurred. Please try again.', 'error')
+                }
+            }
+
+            function renderRequests(rows) {
+                const container = document.getElementById('requests')
+                container.replaceChildren()
+
+                if (!rows.length) {
+                    const empty = document.createElement('p')
+                    empty.className = 'explanation'
+                    empty.textContent = 'Nothing to review right now.'
+                    container.append(empty)
+                    return
+                }
+
+                for (const row of rows) {
+                    const item = document.createElement('div')
+                    item.className = 'request'
+
+                    const hash = document.createElement('code')
+                    hash.textContent = row.hash
+
+                    const meta = document.createElement('p')
+                    meta.className = 'footnote request-meta'
+                    meta.textContent = `${row.ens || 'no ENS'} · requested ${new Date(row.createdAt).toLocaleString()}`
+
+                    const actions = document.createElement('div')
+                    actions.className = 'request-actions'
+
+                    const accept = document.createElement('button')
+                    accept.textContent = 'Accept'
+                    accept.onclick = () => decide(row.hash, 'allow')
+
+                    const deny = document.createElement('button')
+                    deny.textContent = 'Deny'
+                    deny.className = 'danger'
+                    deny.onclick = () => decide(row.hash, 'deny')
+
+                    actions.append(accept, deny)
+                    item.append(hash, meta, actions)
+                    container.append(item)
+                }
+            }
+
+            async function loadPending(identity) {
+                if (identity) {
+                    document.getElementById('signedInAs').textContent = `Signed in as ${identity.user}`
+                }
+                const response = await fetch('/moderation/pending')
+                if (response.status === 401) {
+                    showLogin()
+                    return
+                }
+                if (response.status !== 200) {
+                    snackbar('Failed to load pending requests.', 'error')
+                    return
+                }
+                renderRequests(await response.json())
+                show('pending')
+            }
+
+            document.getElementById('signOut').addEventListener('click', async () => {
+                await fetch('/moderation/logout', { method: 'POST' })
+                showLogin()
+            })
+
+            async function start() {
+                const response = await fetch('/moderation/session')
+                if (response.status === 200) {
+                    await loadPending(await response.json())
+                } else {
+                    showLogin()
+                }
+            }
+
+            window.onload = start
+        </script>
+    </body>
+</html>

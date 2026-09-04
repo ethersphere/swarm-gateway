@@ -206,3 +206,98 @@ code {
     border-radius: 4px;
     padding: 0 4px;
 }
+[hidden] {
+    display: none !important;
+}
+button.secondary {
+    background: transparent;
+    border: 1px solid #30363d;
+    color: #8b949e;
+}
+button.danger {
+    background: #f44336;
+}
+.toolbar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+.toolbar h1.welcome {
+    margin-bottom: 0;
+}
+.toolbar button {
+    margin-top: 0;
+    padding: 8px 14px;
+    font-size: 14px;
+    white-space: nowrap;
+}
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+#requests {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.request {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #161b2280;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 16px;
+}
+.request code {
+    word-break: break-all;
+}
+p.footnote.request-meta {
+    align-self: flex-start;
+    text-align: left;
+}
+.request-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+}
+.request-actions button {
+    margin-top: 4px;
+    flex: 1;
+}
+.modal {
+    position: fixed;
+    inset: 0;
+    background: #0c1115cc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 1;
+}
+.modal-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 480px;
+    max-width: 100%;
+}
+.modal-card code {
+    word-break: break-all;
+}
+.modal-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    margin-top: 4px;
+}
+.modal-actions button {
+    flex: 1;
+}

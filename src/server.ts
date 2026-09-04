@@ -3,6 +3,7 @@ import axios from 'axios'
 import bodyParser from 'body-parser'
 import { Arrays, Strings, Types } from 'cafe-utility'
 import express, { Application, NextFunction, Request, Response } from 'express'
+import { resolve } from 'path'
 import { checkChallenge, createChallenge } from './challenge'
 import { AppConfig, ReadinessMode } from './config'
 import { ApprovalRequests } from './database/ApprovalRequests'
@@ -13,7 +14,10 @@ import { logger } from './logger'
 import { register } from './metrics'
 import { createProxyEndpoints } from './proxy'
 import { checkReadiness } from './readiness'
+import { authenticateModerator } from './services/credentials'
 import { sendMattermostAlert } from './services/mattermost'
+import { checkLoginAttempts, clearLoginAttempts, recordFailedLogin } from './services/rate-limit'
+import { clearSessionCookie, createSessionCookie, readSession } from './services/session'
 import { StampManager } from './stamp'
 
 export function createApp(config: AppConfig, stampManager: StampManager): Application {
@@ -42,6 +46,10 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   const subdomainOffset = config.hostname.split('.').length
   app.set('subdomain offset', subdomainOffset)
 
+  if (config.trustProxy !== undefined) {
+    app.set('trust proxy', config.trustProxy)
+  }
+
   if (config.authorization) {
     app.use('', (req, res, next) => {
       if (req.headers.authorization === config.authorization) {
@@ -58,6 +66,10 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   }
 
   logger.info(`resolving .eth names and CIDs at *.${config.hostname}`)
+
+  if (config.moderationUser && config.moderationPassword && !config.sessionSecret) {
+    logger.warn('SESSION_SECRET is not set, moderator sessions will not survive a restart')
+  }
 
   app.get('/metrics', async (_req, res) => {
     res.set('Content-Type', register.contentType)
@@ -123,6 +135,11 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
       res.sendStatus(400)
       return
     }
+    const existingRequest = await ApprovalRequests.getMany({ hash: Types.asString(hash) }, { limit: 1 })
+    if (existingRequest.length) {
+      res.sendStatus(200)
+      return
+    }
     await ApprovalRequests.insert({ hash: Types.asString(hash), ens: Types.asNullable(Types.asString, ens) })
     await sendMattermostAlert(`### New moderation approval request\n**Hash**: ${hash}\n**ENS**: ${ens || 'N/A'}`)
     res.sendStatus(200)
@@ -140,18 +157,78 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   })
 
   function moderationGuard(req: Request, res: Response, next: NextFunction) {
-    if (!config.moderationSecret) {
-      res.sendStatus(401)
+    if (config.moderationSecret && req.headers.authorization === config.moderationSecret) {
+      next()
       return
     }
 
-    if (req.headers.authorization !== config.moderationSecret) {
-      res.sendStatus(401)
+    if (readSession(req, config)) {
+      next()
       return
     }
 
-    next()
+    res.sendStatus(401)
   }
+
+  app.get('/admin', (_req, res) => {
+    res.sendFile(resolve('public/admin.html'))
+  })
+
+  app.post('/moderation/login', (req, res) => {
+    const ip = req.ip ?? 'unknown'
+    const check = checkLoginAttempts(ip)
+
+    if (check.banned) {
+      res.set('Retry-After', check.retryAfterSeconds.toString())
+      res.status(429).send({ retryAfterSeconds: check.retryAfterSeconds })
+      return
+    }
+
+    try {
+      const { username, password } = JSON.parse(req.body.toString())
+      const identity = authenticateModerator(Types.asString(username), Types.asString(password), config)
+
+      if (!identity) {
+        recordFailedLogin(ip)
+        res.sendStatus(403)
+        return
+      }
+
+      clearLoginAttempts(ip)
+      createSessionCookie(res, identity, config)
+      logger.info('moderator signed in', { user: identity.user })
+      res.send(identity)
+    } catch (error) {
+      logger.error('failed to process moderator login', error)
+      recordFailedLogin(ip)
+      res.sendStatus(403)
+    }
+  })
+
+  app.post('/moderation/logout', (_req, res) => {
+    clearSessionCookie(res)
+    res.sendStatus(200)
+  })
+
+  app.get('/moderation/session', (req, res) => {
+    const identity = readSession(req, config)
+
+    if (!identity) {
+      res.sendStatus(401)
+      return
+    }
+
+    res.send(identity)
+  })
+
+  app.get('/moderation/pending', moderationGuard, async (_req, res) => {
+    try {
+      res.send(await ApprovalRequests.getPending())
+    } catch (error) {
+      logger.error('failed to fetch pending approval requests', error)
+      res.sendStatus(500)
+    }
+  })
 
   app.get('/moderation', moderationGuard, async (_req, res) => {
     const reports = await Reports.getMany()
@@ -170,7 +247,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   app.post('/moderation/deny', moderationGuard, async (req, res) => {
     const json = JSON.parse(req.body.toString())
     const { hash } = json
-    await Rules.insert({ hash: Types.asString(hash), mode: 'allow' })
+    await Rules.insert({ hash: Types.asString(hash), mode: 'deny' })
     res.sendStatus(200)
   })
 
@@ -178,6 +255,27 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
     await runQuery(`DELETE FROM rules WHERE hash = ?`, Types.asString(req.params.hash))
     res.sendStatus(200)
   })
+
+  if (config.adminHostname) {
+    const adminAssets = express.static('public')
+
+    logger.info(`serving the moderation UI at ${config.adminHostname}`)
+
+    // Must run before the proxy, which would otherwise resolve `admin` as a bzz reference.
+    app.use((req, res, next) => {
+      if (req.hostname !== config.adminHostname) {
+        next()
+        return
+      }
+
+      if (req.path === '/') {
+        res.sendFile(resolve('public/admin.html'))
+        return
+      }
+
+      adminAssets(req, res, () => res.sendStatus(404))
+    })
+  }
 
   createProxyEndpoints(app, {
     beeApiUrl: config.beeApiUrl,
