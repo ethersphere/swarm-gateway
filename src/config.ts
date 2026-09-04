@@ -12,6 +12,10 @@ export interface AppConfig {
   authorization?: string | undefined
   instanceName?: string | undefined
   moderationSecret?: string | undefined
+  adminHostname?: string | undefined
+  moderationUser?: string | undefined
+  moderationPassword?: string | undefined
+  sessionSecret?: string | undefined
   removePinHeader?: boolean | undefined
   readinessMode?: ReadinessMode | undefined
   homepage?: string | undefined
@@ -49,6 +53,10 @@ export type EnvironmentVariables = Partial<{
   // Moderation
   MODERATION_SECRET: string
   INSTANCE_NAME: string
+  ADMIN_HOSTNAME: string
+  MODERATION_USER: string
+  MODERATION_PASSWORD: string
+  SESSION_SECRET: string
 
   // Headers manipulation
   REMOVE_PIN_HEADER: string
@@ -89,6 +97,10 @@ export function getAppConfig(env: EnvironmentVariables): AppConfig {
     beeApiUrl: env.BEE_API_URL || DEFAULT_BEE_API_URL,
     authorization: env.AUTH_SECRET || '',
     moderationSecret: env.MODERATION_SECRET || '',
+    adminHostname: env.ADMIN_HOSTNAME || '',
+    moderationUser: env.MODERATION_USER || '',
+    moderationPassword: env.MODERATION_PASSWORD || '',
+    sessionSecret: env.SESSION_SECRET || '',
     instanceName: env.INSTANCE_NAME || '',
     removePinHeader: env.REMOVE_PIN_HEADER ? env.REMOVE_PIN_HEADER === 'true' : true,
     homepage: env.HOMEPAGE || '',

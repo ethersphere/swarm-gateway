@@ -24,6 +24,15 @@ export const ApprovalRequests = {
     return getRows('SELECT * FROM approvalRequests' + query, ...values) as unknown as ApprovalRequestsRow[]
   },
 
+  async getPending(): Promise<ApprovalRequestsRow[]> {
+    return getRows(
+      `SELECT a.* FROM approvalRequests a
+       LEFT JOIN rules r ON r.hash = a.hash
+       WHERE r.id IS NULL
+       ORDER BY a.createdAt DESC`,
+    ) as unknown as ApprovalRequestsRow[]
+  },
+
   async getOneOrNull(
     filter?: Partial<ApprovalRequestsRow>,
     options?: SelectOptions<ApprovalRequestsRow>,
