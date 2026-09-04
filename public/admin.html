@@ -80,6 +80,21 @@
                 }
             }
 
+            function describeWait(seconds) {
+                if (!seconds) {
+                    return 'a moment'
+                }
+                if (seconds < 60) {
+                    return `${seconds} second${seconds === 1 ? '' : 's'}`
+                }
+                const minutes = Math.ceil(seconds / 60)
+                if (minutes < 60) {
+                    return `${minutes} minute${minutes === 1 ? '' : 's'}`
+                }
+                const hours = Math.ceil(minutes / 60)
+                return `${hours} hour${hours === 1 ? '' : 's'}`
+            }
+
             function showLogin() {
                 document.getElementById('password').value = ''
                 show('login')
@@ -103,6 +118,9 @@
                     if (response.status === 200) {
                         document.getElementById('password').value = ''
                         loadPending(await response.json())
+                    } else if (response.status === 429) {
+                        const { retryAfterSeconds } = await response.json().catch(() => ({}))
+                        snackbar(`Too many failed attempts. Try again in ${describeWait(retryAfterSeconds)}.`, 'error')
                     } else {
                         snackbar('Invalid username or password.', 'error')
                     }

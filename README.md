@@ -56,6 +56,7 @@ When `HOSTNAME` is set, the gateway resolves subdomains against the Bee node:
 | SOFT_AUTH                 | `false`                   | When auth is enabled, only enforce it on POST requests                                  |
 | MODERATION_SECRET         | —                         | If set, require this value in the `Authorization` header for moderation endpoints       |
 | INSTANCE_NAME             | —                         | Instance name used to look up moderation settings from the database                     |
+| TRUST_PROXY               | —                         | Express `trust proxy` setting (`true`, a hop count, or an IP/subnet). Required behind a reverse proxy so the login rate limiter sees real client IPs instead of the proxy's |
 | ADMIN_HOSTNAME            | —                         | Hostname that serves the moderation UI at its root (e.g. `admin.gateway.ethswarm.org`); must be set for the UI to be reachable by subdomain |
 | MODERATION_USER           | —                         | Username for the moderation UI at `/admin`; sign-in is disabled unless both this and `MODERATION_PASSWORD` are set |
 | MODERATION_PASSWORD       | —                         | Password for the moderation UI at `/admin`                                              |

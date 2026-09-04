@@ -13,6 +13,7 @@ export interface AppConfig {
   instanceName?: string | undefined
   moderationSecret?: string | undefined
   adminHostname?: string | undefined
+  trustProxy?: boolean | number | string | undefined
   moderationUser?: string | undefined
   moderationPassword?: string | undefined
   sessionSecret?: string | undefined
@@ -54,6 +55,7 @@ export type EnvironmentVariables = Partial<{
   MODERATION_SECRET: string
   INSTANCE_NAME: string
   ADMIN_HOSTNAME: string
+  TRUST_PROXY: string
   MODERATION_USER: string
   MODERATION_PASSWORD: string
   SESSION_SECRET: string
@@ -98,6 +100,7 @@ export function getAppConfig(env: EnvironmentVariables): AppConfig {
     authorization: env.AUTH_SECRET || '',
     moderationSecret: env.MODERATION_SECRET || '',
     adminHostname: env.ADMIN_HOSTNAME || '',
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
     moderationUser: env.MODERATION_USER || '',
     moderationPassword: env.MODERATION_PASSWORD || '',
     sessionSecret: env.SESSION_SECRET || '',
@@ -107,6 +110,16 @@ export function getAppConfig(env: EnvironmentVariables): AppConfig {
     mattermostWebhookUrl: env.MATTERMOST_WEBHOOK_URL || '',
     readinessMode: env.READINESS_MODE === ReadinessMode.Strict ? ReadinessMode.Strict : ReadinessMode.Normal,
   }
+}
+
+function parseTrustProxy(value: string | undefined): boolean | number | string | undefined {
+  if (!value) {
+    return undefined
+  }
+  if (value === 'true' || value === 'false') {
+    return value === 'true'
+  }
+  return /^\d+$/.test(value) ? Number(value) : value
 }
 
 export function getServerConfig(env: EnvironmentVariables): ServerConfig {

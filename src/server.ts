@@ -16,6 +16,7 @@ import { createProxyEndpoints } from './proxy'
 import { checkReadiness } from './readiness'
 import { authenticateModerator } from './services/credentials'
 import { sendMattermostAlert } from './services/mattermost'
+import { checkLoginAttempts, clearLoginAttempts, recordFailedLogin } from './services/rate-limit'
 import { clearSessionCookie, createSessionCookie, readSession } from './services/session'
 import { StampManager } from './stamp'
 
@@ -44,6 +45,10 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
 
   const subdomainOffset = config.hostname.split('.').length
   app.set('subdomain offset', subdomainOffset)
+
+  if (config.trustProxy !== undefined) {
+    app.set('trust proxy', config.trustProxy)
+  }
 
   if (config.authorization) {
     app.use('', (req, res, next) => {
@@ -170,20 +175,32 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   })
 
   app.post('/moderation/login', (req, res) => {
+    const ip = req.ip ?? 'unknown'
+    const check = checkLoginAttempts(ip)
+
+    if (check.banned) {
+      res.set('Retry-After', check.retryAfterSeconds.toString())
+      res.status(429).send({ retryAfterSeconds: check.retryAfterSeconds })
+      return
+    }
+
     try {
       const { username, password } = JSON.parse(req.body.toString())
       const identity = authenticateModerator(Types.asString(username), Types.asString(password), config)
 
       if (!identity) {
+        recordFailedLogin(ip)
         res.sendStatus(403)
         return
       }
 
+      clearLoginAttempts(ip)
       createSessionCookie(res, identity, config)
       logger.info('moderator signed in', { user: identity.user })
       res.send(identity)
     } catch (error) {
       logger.error('failed to process moderator login', error)
+      recordFailedLogin(ip)
       res.sendStatus(403)
     }
   })
