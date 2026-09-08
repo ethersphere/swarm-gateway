@@ -1,0 +1,17 @@
+{
+	admin off
+	on_demand_tls {
+		ask http://127.0.0.1:{$PORT:3000}/tls-check
+	}
+}
+
+:443 {
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:{$PORT:3000}
+}
+
+:80 {
+	redir https://{host}{uri} permanent
+}

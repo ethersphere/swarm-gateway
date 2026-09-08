@@ -1,0 +1,41 @@
+FROM node:lts-bullseye-slim AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build
+
+FROM node:lts-bullseye-slim
+
+WORKDIR /app
+
+# Statically linked Go binary, so the alpine build runs on Debian unchanged.
+COPY --from=caddy:2-alpine /usr/bin/caddy /usr/bin/caddy
+
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY --from=build /app/dist ./dist
+COPY public ./public
+COPY Caddyfile /etc/caddy/Caddyfile
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+ENV PORT=3000
+ENV TRUST_PROXY=1
+# Caddy keeps issued certificates here; mount it or every restart re-issues.
+ENV XDG_DATA_HOME=/data
+ENV XDG_CONFIG_HOME=/config
+
+EXPOSE 80 443
+
+VOLUME /data
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
+	CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+
+ENTRYPOINT ["docker-entrypoint.sh"]
