@@ -34,17 +34,18 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENV PORT=3000
 ENV TRUST_PROXY=1
 
-ENV BEE_API_ADDR=127.0.0.1:1633
+ENV BEE_API_ADDR=127.0.0.1:1635
 ENV BEE_DATA_DIR=/bee
+ENV BEE_P2P_ADDR=:1636
 ENV BEE_FULL_NODE=false
 ENV BEE_SWAP_ENABLE=true
-ENV BEE_API_URL=http://127.0.0.1:1633
+ENV BEE_API_URL=http://127.0.0.1:1635
 
 # Caddy keeps issued certificates here; mount both volumes or state is lost on recreate.
 ENV XDG_DATA_HOME=/data
 ENV XDG_CONFIG_HOME=/config
 
-EXPOSE 80 443 1634
+EXPOSE 80 443 1636
 
 VOLUME /data
 VOLUME /bee
