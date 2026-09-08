@@ -1,4 +1,4 @@
-FROM node:lts-bullseye-slim AS build
+FROM node:lts-bookworm-slim AS build
 
 WORKDIR /app
 
@@ -9,12 +9,18 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-FROM node:lts-bullseye-slim
+FROM node:lts-bookworm-slim
 
 WORKDIR /app
 
-# Statically linked Go binary, so the alpine build runs on Debian unchanged.
+# Bee and Caddy verify TLS against the system bundle, which the slim base omits.
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends ca-certificates \
+	&& rm -rf /var/lib/apt/lists/*
+
+# Both are statically linked Go binaries, so they run on Debian unchanged.
 COPY --from=caddy:2-alpine /usr/bin/caddy /usr/bin/caddy
+COPY --from=ethersphere/bee:2.8.1 /usr/local/bin/bee /usr/local/bin/bee
 
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
@@ -27,13 +33,21 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENV PORT=3000
 ENV TRUST_PROXY=1
-# Caddy keeps issued certificates here; mount it or every restart re-issues.
+
+ENV BEE_API_ADDR=127.0.0.1:1633
+ENV BEE_DATA_DIR=/bee
+ENV BEE_FULL_NODE=false
+ENV BEE_SWAP_ENABLE=true
+ENV BEE_API_URL=http://127.0.0.1:1633
+
+# Caddy keeps issued certificates here; mount both volumes or state is lost on recreate.
 ENV XDG_DATA_HOME=/data
 ENV XDG_CONFIG_HOME=/config
 
-EXPOSE 80 443
+EXPOSE 80 443 1634
 
 VOLUME /data
+VOLUME /bee
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
 	CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
