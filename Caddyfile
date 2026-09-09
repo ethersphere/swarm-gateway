@@ -2,7 +2,7 @@
 	admin off
 	acme_ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
 	on_demand_tls {
-		ask http://127.0.0.1:{$PORT:3000}/tls-check
+		ask http://{$GATEWAY_UPSTREAM:127.0.0.1:3000}/tls-check
 	}
 }
 
@@ -10,7 +10,7 @@
 	tls {
 		on_demand
 	}
-	reverse_proxy 127.0.0.1:{$PORT:3000}
+	reverse_proxy {$GATEWAY_UPSTREAM:127.0.0.1:3000}
 }
 
 :80 {

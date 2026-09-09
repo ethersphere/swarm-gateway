@@ -1,12 +1,13 @@
 #!/bin/bash
 set -uo pipefail
 
+db_pid=''
 bee_pid=''
 caddy_pid=''
 gateway_pid=''
 
 shutdown() {
-	kill -TERM $bee_pid $caddy_pid $gateway_pid 2>/dev/null || true
+	kill -TERM $db_pid $bee_pid $caddy_pid $gateway_pid 2>/dev/null || true
 }
 
 trap shutdown TERM INT
@@ -21,8 +22,47 @@ if [ "${BEE_SWAP_ENABLE:-true}" = "true" ] && [ -z "${BEE_BLOCKCHAIN_RPC_ENDPOIN
 	exit 1
 fi
 
+mkdir -p /run/mysqld
+chown mysql:mysql /run/mysqld
+
+if [ ! -d /var/lib/mysql/mysql ]; then
+	echo "initialising the database"
+	chown -R mysql:mysql /var/lib/mysql
+	mariadb-install-db --user=mysql --datadir=/var/lib/mysql --auth-root-authentication-method=socket > /dev/null
+fi
+
+mariadbd --user=mysql --datadir=/var/lib/mysql --socket=/run/mysqld/mysqld.sock --skip-networking &
+db_pid=$!
+
+for _ in $(seq 1 "${DATABASE_STARTUP_TIMEOUT:-60}"); do
+	if ! kill -0 "$db_pid" 2>/dev/null; then
+		echo "fatal: mariadb exited during startup" >&2
+		shutdown
+		wait
+		exit 1
+	fi
+	if mariadb-admin --socket=/run/mysqld/mysqld.sock ping > /dev/null 2>&1; then
+		echo "mariadb is up at /run/mysqld/mysqld.sock"
+		break
+	fi
+	sleep 1
+done
+
+database_name=$(node -e "process.stdout.write(JSON.parse(process.env.DATABASE_CONFIG).database || '')")
+
+if [ -z "$database_name" ]; then
+	echo "fatal: DATABASE_CONFIG has no database name" >&2
+	shutdown
+	wait
+	exit 1
+fi
+
+mariadb --socket=/run/mysqld/mysqld.sock -e "CREATE DATABASE IF NOT EXISTS \`$database_name\`"
+
 bee start &
 bee_pid=$!
+
+export GATEWAY_UPSTREAM="127.0.0.1:${PORT:-3000}"
 
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 caddy_pid=$!

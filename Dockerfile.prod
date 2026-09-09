@@ -13,10 +13,12 @@ FROM node:lts-bookworm-slim
 
 WORKDIR /app
 
-# Bee and Caddy verify TLS against the system bundle, which the slim base omits.
+# ca-certificates: Bee and Caddy verify TLS against the system bundle, which the slim base omits.
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates \
-	&& rm -rf /var/lib/apt/lists/*
+	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+		ca-certificates \
+		mariadb-server \
+	&& rm -rf /var/lib/apt/lists/* /var/lib/mysql/*
 
 # Both are statically linked Go binaries, so they run on Debian unchanged.
 COPY --from=caddy:2-alpine /usr/bin/caddy /usr/bin/caddy
@@ -34,6 +36,9 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENV PORT=3000
 ENV TRUST_PROXY=1
 
+# MariaDB listens on a unix socket only, so it is unreachable from outside the container.
+ENV DATABASE_CONFIG="{\"socketPath\":\"/run/mysqld/mysqld.sock\",\"user\":\"root\",\"database\":\"swarmgateway\"}"
+
 ENV BEE_API_ADDR=127.0.0.1:1635
 ENV BEE_DATA_DIR=/bee
 ENV BEE_P2P_ADDR=:1636
@@ -41,7 +46,7 @@ ENV BEE_FULL_NODE=false
 ENV BEE_SWAP_ENABLE=true
 ENV BEE_API_URL=http://127.0.0.1:1635
 
-# Caddy keeps issued certificates here; mount both volumes or state is lost on recreate.
+# Caddy keeps issued certificates here; mount every volume or state is lost on recreate.
 ENV XDG_DATA_HOME=/data
 ENV XDG_CONFIG_HOME=/config
 
@@ -49,6 +54,7 @@ EXPOSE 80 443 1636
 
 VOLUME /data
 VOLUME /bee
+VOLUME /var/lib/mysql
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
 	CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"

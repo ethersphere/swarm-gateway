@@ -1,0 +1,96 @@
+name: swarm-gateway
+
+services:
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: swarmgateway
+      MARIADB_USER: gateway
+      MARIADB_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
+      MARIADB_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  bee:
+    image: ethersphere/bee:2.8.1
+    command: start
+    restart: unless-stopped
+    environment:
+      BEE_API_ADDR: :1633
+      BEE_P2P_ADDR: :1636
+      BEE_FULL_NODE: "false"
+      BEE_PASSWORD: ${BEE_PASSWORD:?set BEE_PASSWORD in .env}
+    env_file:
+      - .env
+    ports:
+      - "1636:1636"
+      - "1636:1636/udp"
+    volumes:
+      - bee-data:/home/bee/.bee
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/1633"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  gateway:
+    build: .
+    restart: unless-stopped
+    environment:
+      HOSTNAME: ${GATEWAY_HOSTNAME:?set GATEWAY_HOSTNAME in .env}
+      PORT: "3000"
+      TRUST_PROXY: "1"
+      BEE_API_URL: http://bee:1633
+      DATABASE_CONFIG: '{"host":"db","port":3306,"user":"gateway","database":"swarmgateway"}'
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      bee:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      GATEWAY_UPSTREAM: gateway:3000
+    env_file:
+      - .env
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  bee-data:
+  caddy-data:
+  caddy-config:
