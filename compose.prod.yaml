@@ -51,7 +51,7 @@ services:
       DATABASE_CONFIG: '{"host":"db","port":3306,"user":"gateway","database":"swarmgateway"}'
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
     env_file:
-      - .gateway.env
+      - ../.gateway.env
     depends_on:
       db:
         condition: service_healthy
@@ -76,7 +76,7 @@ services:
     environment:
       GATEWAY_UPSTREAM: gateway:3000
     env_file:
-      - .gateway.env
+      - ../.gateway.env
     ports:
       - "80:80"
       - "443:443"
