@@ -26,6 +26,8 @@ services:
       BEE_P2P_ADDR: :1636
       BEE_FULL_NODE: "false"
       BEE_PASSWORD: ${BEE_PASSWORD:?set BEE_PASSWORD in .env}
+      # ENS lives on Ethereum mainnet, so this is a different RPC to the Gnosis one above.
+      BEE_RESOLVER_OPTIONS: ${BEE_RESOLVER_OPTIONS:-}
     env_file:
       - ../.gateway.env
     ports:
