@@ -27,7 +27,7 @@ services:
       BEE_FULL_NODE: "false"
       BEE_PASSWORD: ${BEE_PASSWORD:?set BEE_PASSWORD in .env}
     env_file:
-      - .env
+      - ../.gateway.env
     ports:
       - "1636:1636"
       - "1636:1636/udp"
@@ -51,7 +51,7 @@ services:
       DATABASE_CONFIG: '{"host":"db","port":3306,"user":"gateway","database":"swarmgateway"}'
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
     env_file:
-      - .env
+      - .gateway.env
     depends_on:
       db:
         condition: service_healthy
@@ -76,7 +76,7 @@ services:
     environment:
       GATEWAY_UPSTREAM: gateway:3000
     env_file:
-      - .env
+      - .gateway.env
     ports:
       - "80:80"
       - "443:443"
@@ -91,6 +91,9 @@ services:
 
 volumes:
   db-data:
+  # Created by the all-in-one container; holds the funded wallet, so used as-is.
   bee-data:
+    external: true
+    name: bee-data
   caddy-data:
   caddy-config:
