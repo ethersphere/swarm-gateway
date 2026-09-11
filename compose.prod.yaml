@@ -17,31 +17,6 @@ services:
       timeout: 5s
       retries: 12
 
-  bee:
-    image: ethersphere/bee:2.8.1
-    command: start
-    restart: unless-stopped
-    environment:
-      BEE_API_ADDR: :1633
-      BEE_P2P_ADDR: :1636
-      BEE_FULL_NODE: "false"
-      BEE_PASSWORD: ${BEE_PASSWORD:?set BEE_PASSWORD in .env}
-      # ENS lives on Ethereum mainnet, so this is a different RPC to the Gnosis one above.
-      BEE_RESOLVER_OPTIONS: ${BEE_RESOLVER_OPTIONS:-}
-    env_file:
-      - ../.gateway.env
-    ports:
-      - "1636:1636"
-      - "1636:1636/udp"
-    volumes:
-      - bee-data:/home/bee/.bee
-    healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/1633"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
-
   gateway:
     build: .
     restart: unless-stopped
@@ -49,16 +24,19 @@ services:
       HOSTNAME: ${GATEWAY_HOSTNAME:?set GATEWAY_HOSTNAME in .env}
       PORT: "3000"
       TRUST_PROXY: "1"
+      # Resolved over the shared `swarm` network, from the bee-services project.
       BEE_API_URL: http://bee:1633
       DATABASE_CONFIG: '{"host":"db","port":3306,"user":"gateway","database":"swarmgateway"}'
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
     env_file:
-      - ../.gateway.env
+      - .env
     depends_on:
       db:
         condition: service_healthy
-      bee:
-        condition: service_healthy
+    networks:
+      - default
+      - edge
+      - swarm
     healthcheck:
       test:
         [
@@ -72,30 +50,12 @@ services:
       retries: 3
       start_period: 15s
 
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    environment:
-      GATEWAY_UPSTREAM: gateway:3000
-    env_file:
-      - ../.gateway.env
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      gateway:
-        condition: service_healthy
-
 volumes:
   db-data:
-  # Created by the all-in-one container; holds the funded wallet, so used as-is.
-  bee-data:
+
+networks:
+  default:
+  edge:
     external: true
-    name: bee-data
-  caddy-data:
-  caddy-config:
+  swarm:
+    external: true
