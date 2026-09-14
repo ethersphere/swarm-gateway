@@ -123,6 +123,11 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
       res.sendStatus(400)
       return
     }
+    const existingRequest = await ApprovalRequests.getMany({ hash: Types.asString(hash) }, { limit: 1 })
+    if (existingRequest.length) {
+      res.sendStatus(200)
+      return
+    }
     await ApprovalRequests.insert({ hash: Types.asString(hash), ens: Types.asNullable(Types.asString, ens) })
     await sendMattermostAlert(`### New moderation approval request\n**Hash**: ${hash}\n**ENS**: ${ens || 'N/A'}`)
     res.sendStatus(200)
