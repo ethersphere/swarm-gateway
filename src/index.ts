@@ -4,6 +4,7 @@ import { EnvironmentVariables, getAppConfig, getServerConfig, getStampConfig } f
 import { logger, subscribeLogServerRequests } from './logger'
 import { runMigrations } from './migration'
 import { createApp } from './server'
+import { startFeedMonitor } from './services/feed-monitor'
 import { setupSchema } from './setup'
 import { StampManager } from './stamp'
 
@@ -21,6 +22,10 @@ async function main() {
 
   const stampManager = new StampManager(appConfig.beeApiUrl, stampConfig)
   stampManager.start()
+
+  if (process.env.DATABASE_CONFIG && process.env.DATABASE_CONFIG !== '{}') {
+    startFeedMonitor(appConfig.beeApiUrl)
+  }
 
   const app = createApp(appConfig, stampManager)
 

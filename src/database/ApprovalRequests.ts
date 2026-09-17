@@ -6,12 +6,20 @@ export interface ApprovalRequestsRow {
   id: ApprovalRequestsRowId
   hash: string
   ens?: string | null
+  feedIndex?: string | null
+  feedOwner?: string | null
+  feedTopic?: string | null
+  feedReference?: string | null
   createdAt: Date
 }
 
 export interface NewApprovalRequestsRow {
   hash: string
   ens?: string | null
+  feedIndex?: string | null
+  feedOwner?: string | null
+  feedTopic?: string | null
+  feedReference?: string | null
   createdAt?: Date | null
 }
 

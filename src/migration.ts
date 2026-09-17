@@ -14,4 +14,11 @@ export async function runMigrations() {
       "ALTER TABLE `settings` ADD `defaultEnsRule` ENUM('allow','deny') NOT NULL AFTER `defaultFileRule`, ADD `redirectUri` VARCHAR(100) NOT NULL AFTER `defaultEnsRule`;",
     )
   }
+
+  const approvals = await getOnlyRowOrThrow(`SHOW CREATE TABLE approvalRequests;`)
+  if (!Types.asString(approvals['Create Table']).includes('feedIndex')) {
+    await runQuery(
+      'ALTER TABLE `approvalRequests` ADD `feedIndex` VARCHAR(160) NULL, ADD `feedOwner` VARCHAR(64) NULL, ADD `feedTopic` VARCHAR(128) NULL, ADD `feedReference` VARCHAR(128) NULL;',
+    )
+  }
 }
