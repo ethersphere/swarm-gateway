@@ -124,6 +124,12 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
       res.sendStatus(400)
       return
     }
+
+    const existingRequest = await ApprovalRequests.getMany({ hash: Types.asString(hash) }, { limit: 1 })
+    if (existingRequest.length) {
+      res.sendStatus(200)
+      return
+    }
     const feed = await resolveFeed(config.beeApiUrl, {
       hash: Types.asString(hash),
       feedOwner: Types.asNullable(Types.asString, feedOwner),
@@ -186,7 +192,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   app.post('/moderation/deny', moderationGuard, async (req, res) => {
     const json = JSON.parse(req.body.toString())
     const { hash } = json
-    await Rules.insert({ hash: Types.asString(hash), mode: 'allow' })
+    await Rules.insert({ hash: Types.asString(hash), mode: 'deny' })
     res.sendStatus(200)
   })
 
