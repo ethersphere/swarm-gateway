@@ -175,7 +175,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   app.post('/moderation/deny', moderationGuard, async (req, res) => {
     const json = JSON.parse(req.body.toString())
     const { hash } = json
-    await Rules.insert({ hash: Types.asString(hash), mode: 'allow' })
+    await Rules.insert({ hash: Types.asString(hash), mode: 'deny' })
     res.sendStatus(200)
   })
 
