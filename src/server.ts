@@ -139,8 +139,8 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
       hash: Types.asString(hash),
       ens: Types.asNullable(Types.asString, ens),
       feedIndex: feed?.index ?? null,
-      feedOwner: feed ? Types.asNullable(Types.asString, feedOwner) : null,
-      feedTopic: feed ? Types.asNullable(Types.asString, feedTopic) : null,
+      feedOwner: feed?.owner ?? null,
+      feedTopic: feed?.topic ?? null,
       feedReference: feed?.reference ?? null,
     })
     await sendMattermostAlert(
