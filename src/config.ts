@@ -16,6 +16,7 @@ export interface AppConfig {
   readinessMode?: ReadinessMode | undefined
   homepage?: string | undefined
   mattermostWebhookUrl?: string
+  mattermostStdout?: boolean
 }
 
 export interface ServerConfig {
@@ -66,6 +67,7 @@ export type EnvironmentVariables = Partial<{
   HOMEPAGE: string
 
   MATTERMOST_WEBHOOK_URL: string
+  MATTERMOST_STDOUT: string
 }>
 
 export const SUPPORTED_LEVELS = ['critical', 'error', 'warn', 'info', 'verbose', 'debug'] as const
@@ -93,6 +95,7 @@ export function getAppConfig(env: EnvironmentVariables): AppConfig {
     removePinHeader: env.REMOVE_PIN_HEADER ? env.REMOVE_PIN_HEADER === 'true' : true,
     homepage: env.HOMEPAGE || '',
     mattermostWebhookUrl: env.MATTERMOST_WEBHOOK_URL || '',
+    mattermostStdout: env.MATTERMOST_STDOUT === 'true',
     readinessMode: env.READINESS_MODE === ReadinessMode.Strict ? ReadinessMode.Strict : ReadinessMode.Normal,
   }
 }

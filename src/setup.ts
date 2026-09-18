@@ -22,6 +22,10 @@ export async function setupSchema() {
         \`id\` int NOT NULL PRIMARY KEY AUTO_INCREMENT,
         \`hash\` varchar(128) NOT NULL,
         \`ens\` varchar(128),
+        \`feedIndex\` varchar(160),
+        \`feedOwner\` varchar(64),
+        \`feedTopic\` varchar(128),
+        \`feedReference\` varchar(128),
         \`createdAt\` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
     ],

@@ -13,6 +13,7 @@ import { logger } from './logger'
 import { register } from './metrics'
 import { createProxyEndpoints } from './proxy'
 import { checkReadiness } from './readiness'
+import { resolveFeed } from './services/feed'
 import { sendMattermostAlert } from './services/mattermost'
 import { StampManager } from './stamp'
 
@@ -118,18 +119,34 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
 
   app.post('/moderation/approval', async (req, res) => {
     const json = JSON.parse(req.body.toString())
-    const { hash, ens, challengeId, challengeSolution } = json
+    const { hash, ens, feedOwner, feedTopic, challengeId, challengeSolution } = json
     if (!(await checkChallenge(challengeId, challengeSolution))) {
       res.sendStatus(400)
       return
     }
+
     const existingRequest = await ApprovalRequests.getMany({ hash: Types.asString(hash) }, { limit: 1 })
     if (existingRequest.length) {
       res.sendStatus(200)
       return
     }
-    await ApprovalRequests.insert({ hash: Types.asString(hash), ens: Types.asNullable(Types.asString, ens) })
-    await sendMattermostAlert(`### New moderation approval request\n**Hash**: ${hash}\n**ENS**: ${ens || 'N/A'}`)
+    const feed = await resolveFeed(config.beeApiUrl, {
+      hash: Types.asString(hash),
+      feedOwner: Types.asNullable(Types.asString, feedOwner),
+      feedTopic: Types.asNullable(Types.asString, feedTopic),
+    }).catch(() => null)
+    await ApprovalRequests.insert({
+      hash: Types.asString(hash),
+      ens: Types.asNullable(Types.asString, ens),
+      feedIndex: feed?.index ?? null,
+      feedOwner: feed ? Types.asNullable(Types.asString, feedOwner) : null,
+      feedTopic: feed ? Types.asNullable(Types.asString, feedTopic) : null,
+      feedReference: feed?.reference ?? null,
+    })
+    await sendMattermostAlert(
+      `### New moderation approval request\n**Hash**: ${hash}\n**ENS**: ${ens || 'N/A'}` +
+        (feed ? `\n**Feed**: yes (index ${feed.index}) — content is mutable and will be monitored` : ''),
+    )
     res.sendStatus(200)
   })
 
