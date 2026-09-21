@@ -1,7 +1,7 @@
 import { Dates } from 'cafe-utility'
 import { ApprovalRequests, ApprovalRequestsRow } from '../database/ApprovalRequests'
 import { logger } from '../logger'
-import { resolveFeed } from './feed'
+import { feedReferenceAtIndex, resolveFeed } from './feed'
 import { sendMattermostAlert } from './mattermost'
 
 const DEFAULT_INTERVAL = Dates.minutes(5)
@@ -26,7 +26,7 @@ async function checkFeed(beeApiUrl: string, row: ApprovalRequestsRow): Promise<v
   }
 
   const head = current.reference ?? '(unknown — fetch the hash to see current content)'
-  const previous = row.feedReference ?? '(unknown — not recorded)'
+  const previous = await previousContent(beeApiUrl, current.owner, current.topic, current.index, row.feedReference)
 
   logger.warn('approved feed content changed', { hash: row.hash, from: row.feedIndex, to: current.index })
   await sendMattermostAlert(
@@ -38,5 +38,28 @@ async function checkFeed(beeApiUrl: string, row: ApprovalRequestsRow): Promise<v
       `**Previous content**: ${previous}`,
   )
 
-  await ApprovalRequests.update(row.id, { feedIndex: current.index, feedReference: current.reference })
+  await ApprovalRequests.update(row.id, {
+    feedIndex: current.index,
+    feedReference: current.reference,
+    feedOwner: current.owner,
+    feedTopic: current.topic,
+  })
+}
+
+// The head-1 reference, read directly when the feed is resolvable, else the last
+// reference we recorded, else unknown.
+async function previousContent(
+  beeApiUrl: string,
+  owner: string | null,
+  topic: string | null,
+  currentIndex: string,
+  recorded: string | null | undefined,
+): Promise<string> {
+  if (owner && topic && BigInt(currentIndex) > 0n) {
+    const reference = await feedReferenceAtIndex(beeApiUrl, owner, topic, (BigInt(currentIndex) - 1n).toString())
+    if (reference) {
+      return reference
+    }
+  }
+  return recorded ?? '(unknown — not recorded)'
 }
