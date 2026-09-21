@@ -32,6 +32,9 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
       'Access-Control-Allow-Headers',
       'Content-Type, Authorization, Content-Disposition, swarm-postage-batch-id, swarm-postage-stamp, swarm-deferred-upload, swarm-encrypt, swarm-collection, swarm-redundancy-level',
     )
+    // Let browser clients read the allow-list (not a safelisted response header) so they
+    // can drop headers this gateway refuses, and read Swarm-Feed-Index off feed responses.
+    res.set('Access-Control-Expose-Headers', 'Access-Control-Allow-Headers, Swarm-Feed-Index')
 
     if (req.method === 'OPTIONS') {
       res.sendStatus(200)
