@@ -4,11 +4,12 @@ import { Application, Response } from 'express'
 import { IncomingHttpHeaders } from 'http'
 import { subdomainToBzz } from './bzz-link'
 import { AllowedUserAgents } from './database/AllowedUserAgents'
-import { Rules } from './database/Rules'
+import { Rules, RulesRow } from './database/Rules'
 import { Settings, SettingsRow, SettingsRowId } from './database/Settings'
 import { TypeHints, TypeHintsRow } from './database/TypeHints'
 import { logger } from './logger'
 import { getNotFoundPage } from './not-found'
+import { resolveEnsReferences } from './services/ens'
 import { StampManager } from './stamp'
 
 export const GET_PROXY_ENDPOINTS = ['/chunks/*', '/bytes/*', '/bzz/*', '/feeds/*']
@@ -221,7 +222,14 @@ async function fetchAndRespond(
     const currentCid = Strings.searchSubstring(path, x => x.length > 48 && x.startsWith('bah'))
     const currentHash = Strings.searchHex(path, 64)
     const hash = currentCid || currentHash
-    const rule = hash ? await Rules.getOneOrNull({ hash }).catch(() => null) : null
+    // An ENS name carries no hash in the path, so rules are matched against the
+    // references it resolves to; otherwise a denied hash is served via its name.
+    const ensName = path.split('/').filter(x => x)[1]
+    const ensHashes =
+      method === 'GET' && ensName?.toLowerCase().endsWith('.eth')
+        ? await resolveEnsReferences(options.beeApiUrl, ensName)
+        : []
+    const rule = await findRule([...ensHashes, ...(hash ? [hash] : [])])
 
     if (rule) {
       if (rule.mode === 'deny') {
@@ -232,8 +240,9 @@ async function fetchAndRespond(
     }
 
     if (!allowed) {
-      if (hash) {
-        res.redirect(`${settings.redirectUri}/forbidden?hash=${hash}`)
+      const forbiddenHash = rule?.hash || hash
+      if (forbiddenHash) {
+        res.redirect(`${settings.redirectUri}/forbidden?hash=${forbiddenHash}`)
       } else {
         res.redirect(`${settings.redirectUri}/forbidden`)
       }
@@ -269,4 +278,10 @@ async function fetchAndRespond(
     logger.error('proxy failed', error)
     res.sendStatus(500)
   }
+}
+
+// A deny on any of the hashes wins over an allow on another.
+async function findRule(hashes: string[]): Promise<RulesRow | null> {
+  const rules = await Promise.all(hashes.map(hash => Rules.getOneOrNull({ hash }).catch(() => null)))
+  return rules.find(x => x?.mode === 'deny') || rules.find(x => x) || null
 }
