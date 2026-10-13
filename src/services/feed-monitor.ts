@@ -7,8 +7,11 @@ import { sendMattermostAlert } from './mattermost'
 const DEFAULT_INTERVAL = Dates.minutes(5)
 
 export function startFeedMonitor(beeApiUrl: string, intervalMs: number = DEFAULT_INTERVAL): void {
-  const tick = () => sweep(beeApiUrl).catch(error => logger.error('feed monitor sweep failed', error))
-  setInterval(tick, intervalMs).unref()
+  const tick = async () => {
+    await sweep(beeApiUrl).catch(error => logger.error('feed monitor sweep failed', error))
+    setTimeout(tick, intervalMs).unref()
+  }
+  setTimeout(tick, intervalMs).unref()
   logger.info(`monitoring approved feeds for content changes every ${Math.round(intervalMs / 1000)}s`)
 }
 
