@@ -122,7 +122,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
 
   app.post('/moderation/approval', async (req, res) => {
     const json = JSON.parse(req.body.toString())
-    const { hash, ens, feedOwner, feedTopic, challengeId, challengeSolution } = json
+    const { hash, ens, challengeId, challengeSolution } = json
     if (!(await checkChallenge(challengeId, challengeSolution))) {
       res.sendStatus(400)
       return
@@ -133,11 +133,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
       res.sendStatus(200)
       return
     }
-    const feed = await resolveFeed(config.beeApiUrl, {
-      hash: Types.asString(hash),
-      feedOwner: Types.asNullable(Types.asString, feedOwner),
-      feedTopic: Types.asNullable(Types.asString, feedTopic),
-    }).catch(() => null)
+    const feed = await resolveFeed(config.beeApiUrl, Types.asString(hash)).catch(() => null)
     await ApprovalRequests.insert({
       hash: Types.asString(hash),
       ens: Types.asNullable(Types.asString, ens),

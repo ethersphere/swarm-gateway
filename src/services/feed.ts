@@ -16,28 +16,13 @@ export interface FeedState {
   topic: string | null
 }
 
-export interface FeedCoordinates {
-  hash: string
-  feedOwner?: string | null
-  feedTopic?: string | null
-}
-
-// Resolves a reference to its current feed state, or null if it is not a feed.
-// Owner+topic yield the content reference; a feed manifest encodes both in its
-// metadata, so we recover them from a bare hash and still get the reference.
-// Only a non-manifest feed reference falls back to the header, index-only path.
-export async function resolveFeed(beeApiUrl: string, coords: FeedCoordinates): Promise<FeedState | null> {
+// Owner and topic come only from the manifest metadata, never from the client.
+export async function resolveFeed(beeApiUrl: string, hash: string): Promise<FeedState | null> {
   const bee = new Bee(beeApiUrl)
 
-  let owner = coords.feedOwner || null
-  let topic = coords.feedTopic || null
-  if (!owner || !topic) {
-    const recovered = await recoverFeedCoordinates(bee, coords.hash)
-    owner = owner || recovered?.owner || null
-    topic = topic || recovered?.topic || null
-  }
-
-  if (owner && topic) {
+  const coordinates = await readFeedCoordinates(bee, hash)
+  if (coordinates) {
+    const { owner, topic } = coordinates
     try {
       const update = await bee.feed.makeReader(topic, owner).downloadReference()
       return { index: canonicalIndex(update.feedIndex), reference: update.reference.toString(), owner, topic }
@@ -46,7 +31,7 @@ export async function resolveFeed(beeApiUrl: string, coords: FeedCoordinates): P
     }
   }
 
-  return resolveFeedIndexFromHeader(beeApiUrl, coords.hash)
+  return resolveFeedIndexFromHeader(beeApiUrl, hash)
 }
 
 // The content reference at a specific past index — used to report the previous
@@ -67,7 +52,7 @@ export async function feedReferenceAtIndex(
   }
 }
 
-async function recoverFeedCoordinates(bee: Bee, hash: string): Promise<{ owner: string; topic: string } | null> {
+async function readFeedCoordinates(bee: Bee, hash: string): Promise<{ owner: string; topic: string } | null> {
   try {
     const node = await MantarayNode.unmarshal(bee, hash)
     const metadata = node.getRootMetadata().getOrFallback(() => ({}))

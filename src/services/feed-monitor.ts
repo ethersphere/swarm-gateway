@@ -20,7 +20,7 @@ async function sweep(beeApiUrl: string): Promise<void> {
 }
 
 async function checkFeed(beeApiUrl: string, row: ApprovalRequestsRow): Promise<void> {
-  const current = await resolveFeed(beeApiUrl, row)
+  const current = await resolveFeed(beeApiUrl, row.hash)
   if (!current || current.index === row.feedIndex) {
     return
   }
