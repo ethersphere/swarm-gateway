@@ -21,4 +21,11 @@ export async function runMigrations() {
       'ALTER TABLE `approvalRequests` ADD `feedIndex` VARCHAR(160) NULL, ADD `feedOwner` VARCHAR(64) NULL, ADD `feedTopic` VARCHAR(128) NULL, ADD `feedReference` VARCHAR(128) NULL;',
     )
   }
+
+  const rules = await getOnlyRowOrThrow(`SHOW CREATE TABLE rules;`)
+  if (!Types.asString(rules['Create Table']).includes('feedIndex')) {
+    await runQuery(
+      'ALTER TABLE `rules` ADD `feedIndex` VARCHAR(160) NULL, ADD `feedOwner` VARCHAR(64) NULL, ADD `feedTopic` VARCHAR(128) NULL, ADD `feedReference` VARCHAR(128) NULL;',
+    )
+  }
 }
