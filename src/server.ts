@@ -184,7 +184,15 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   app.post('/moderation/allow', moderationGuard, async (req, res) => {
     const json = JSON.parse(req.body.toString())
     const { hash } = json
-    await Rules.insert({ hash: Types.asString(hash), mode: 'allow' })
+    const feed = await resolveFeed(config.beeApiUrl, Types.asString(hash)).catch(() => null)
+    await Rules.insert({
+      hash: Types.asString(hash),
+      mode: 'allow',
+      feedIndex: feed?.index ?? null,
+      feedOwner: feed?.owner ?? null,
+      feedTopic: feed?.topic ?? null,
+      feedReference: feed?.reference ?? null,
+    })
     res.sendStatus(200)
   })
 

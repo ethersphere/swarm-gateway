@@ -6,12 +6,20 @@ export interface RulesRow {
   id: RulesRowId
   hash: string
   mode: 'allow' | 'deny'
+  feedIndex?: string | null
+  feedOwner?: string | null
+  feedTopic?: string | null
+  feedReference?: string | null
   createdAt: Date
 }
 
 export interface NewRulesRow {
   hash: string
   mode: 'allow' | 'deny'
+  feedIndex?: string | null
+  feedOwner?: string | null
+  feedTopic?: string | null
+  feedReference?: string | null
   createdAt?: Date | null
 }
 

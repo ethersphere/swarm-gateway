@@ -1,5 +1,5 @@
 import { Dates } from 'cafe-utility'
-import { ApprovalRequests, ApprovalRequestsRow } from '../database/ApprovalRequests'
+import { Rules, RulesRow } from '../database/Rules'
 import { logger } from '../logger'
 import { feedReferenceAtIndex, resolveFeed } from './feed'
 import { sendMattermostAlert } from './mattermost'
@@ -13,13 +13,13 @@ export function startFeedMonitor(beeApiUrl: string, intervalMs: number = DEFAULT
 }
 
 async function sweep(beeApiUrl: string): Promise<void> {
-  const feeds = (await ApprovalRequests.getMany()).filter(row => row.feedIndex)
+  const feeds = (await Rules.getMany({ mode: 'allow' })).filter(row => row.feedIndex)
   for (const row of feeds) {
     await checkFeed(beeApiUrl, row).catch(error => logger.error('feed check failed', { hash: row.hash, error }))
   }
 }
 
-async function checkFeed(beeApiUrl: string, row: ApprovalRequestsRow): Promise<void> {
+async function checkFeed(beeApiUrl: string, row: RulesRow): Promise<void> {
   const current = await resolveFeed(beeApiUrl, row.hash)
   if (!current || current.index === row.feedIndex) {
     return
@@ -32,13 +32,12 @@ async function checkFeed(beeApiUrl: string, row: ApprovalRequestsRow): Promise<v
   await sendMattermostAlert(
     `### Approved feed content changed\n` +
       `**Hash**: ${row.hash}\n` +
-      `**ENS**: ${row.ens || 'N/A'}\n` +
       `**Feed index**: ${row.feedIndex} → ${current.index}\n` +
       `**Head content**: ${head}\n` +
       `**Previous content**: ${previous}`,
   )
 
-  await ApprovalRequests.update(row.id, {
+  await Rules.update(row.id, {
     feedIndex: current.index,
     feedReference: current.reference,
     feedOwner: current.owner,
