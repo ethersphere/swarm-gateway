@@ -1,5 +1,6 @@
 import { Bee } from '@ethersphere/bee-js'
 import bodyParser from 'body-parser'
+import bytes from 'bytes'
 import { Arrays, Objects, Strings, Types } from 'cafe-utility'
 import express, { Application, NextFunction, Request, Response } from 'express'
 import { Readable } from 'stream'
@@ -35,9 +36,13 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   const bee = new Bee(config.beeApiUrl)
   const app = express()
 
-  const postSizeLimit = Arrays.getArgument(process.argv, 'post-size-limit', process.env, 'POST_SIZE_LIMIT') || '1gb'
-
-  app.use(bodyParser.raw({ inflate: true, limit: postSizeLimit, type: () => true }))
+  const postSizeLimit = bytes.parse(
+    Arrays.getArgument(process.argv, 'post-size-limit', process.env, 'POST_SIZE_LIMIT') || '1gb',
+  )
+  if (postSizeLimit === null) {
+    throw Error('invalid POST_SIZE_LIMIT')
+  }
+  const parseBody = bodyParser.raw({ type: () => true })
 
   app.use((req, res, next) => {
     res.set('Access-Control-Allow-Origin', '*')
@@ -151,6 +156,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
 
   app.post(
     '/moderation/approval',
+    parseBody,
     handleErrors(async (req, res) => {
       const json = JSON.parse(req.body.toString())
       const { hash, ens, challengeId, challengeSolution } = json
@@ -183,6 +189,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
 
   app.post(
     '/moderation/report',
+    parseBody,
     handleErrors(async (req, res) => {
       const json = JSON.parse(req.body.toString())
       const { hash, reason, challengeId, challengeSolution } = json
@@ -223,6 +230,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   app.post(
     '/moderation/allow',
     moderationGuard,
+    parseBody,
     handleErrors(async (req, res) => {
       const json = JSON.parse(req.body.toString())
       const { hash } = json
@@ -242,6 +250,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   app.post(
     '/moderation/deny',
     moderationGuard,
+    parseBody,
     handleErrors(async (req, res) => {
       const json = JSON.parse(req.body.toString())
       const { hash } = json
@@ -265,6 +274,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
     stampManager,
     hostname: config.hostname,
     instanceName: config.instanceName,
+    postSizeLimit,
   })
 
   if (config.homepage) {

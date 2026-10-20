@@ -130,6 +130,14 @@ describe('path traversal into the Bee API', () => {
     assert.deepEqual(beeRequests, [])
   })
 
+  for (const host of ['../wallet#.gw.local', '../stamps?.gw.local', `${HASH}/../../wallet#.gw.local`]) {
+    it(`rejects traversal through the host ${host}`, async () => {
+      beeRequests.length = 0
+      assert.equal((await request(port, 'GET', '/', { host })).status, 400)
+      assert.deepEqual(beeRequests, [])
+    })
+  }
+
   it('keeps the homepage query string out of the joined path', async () => {
     beeRequests.length = 0
     await request(homepagePort, 'GET', '/?a=/../../../wallet')
