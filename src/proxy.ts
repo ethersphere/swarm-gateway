@@ -37,6 +37,7 @@ const REFERENCE_SEGMENT = /^\/*(?:bzz|bytes|chunks)\/+([^/]+)/i
 const HEX_REFERENCE = /^(?:[0-9a-fA-F]{64}){1,2}$/
 const CID_REFERENCE = /^bah[a-z2-7]+$/
 const ENS_NAME = /\.eth$/i
+const ENCODED_SEPARATOR = /%(?:2f|5c)/i
 const SUBDOMAIN = /^[0-9a-z.-]+$/i
 const NOT_FOUND_MESSAGE = 'address not found or incorrect'
 const NOT_FOUND_PEEK_LENGTH = 100
@@ -95,8 +96,11 @@ export function getReferenceSegment(path: string): string | undefined {
 }
 
 export function isCanonicalReference(segment: string): boolean {
-  if (HEX_REFERENCE.test(segment) || ENS_NAME.test(segment)) {
+  if (HEX_REFERENCE.test(segment)) {
     return true
+  }
+  if (ENS_NAME.test(segment)) {
+    return !ENCODED_SEPARATOR.test(segment)
   }
   if (!CID_REFERENCE.test(segment)) {
     return false
