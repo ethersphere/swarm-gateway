@@ -15,8 +15,8 @@ export async function createChallenge(): Promise<Challenge> {
 }
 
 export async function checkChallenge(challengeId: ChallengesRowId, challengeSolution: string) {
-  const challenge = await Challenges.getOneOrThrow({ id: challengeId })
-  if (challenge.solution) {
+  const challenge = await Challenges.getOneOrNull({ id: challengeId })
+  if (!challenge || challenge.solution) {
     return false
   }
   const result = Binary.keccak256(
