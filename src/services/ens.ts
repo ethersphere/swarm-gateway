@@ -6,10 +6,11 @@ export async function resolveEnsReferences(beeApiUrl: string, name: string): Pro
   try {
     return await Cache.get(`ens:${name}`, Dates.minutes(1), async () => {
       const response = await fetch(Strings.joinUrl([beeApiUrl, 'bytes', name]), {
-        method: 'HEAD',
+        headers: { Range: 'bytes=0-0' },
         redirect: 'manual',
         signal: AbortSignal.timeout(Dates.seconds(30)),
       })
+      await response.body?.cancel()
       if (!response.ok) {
         throw Error(`ens resolution responded with ${response.status} for ${name}`)
       }
