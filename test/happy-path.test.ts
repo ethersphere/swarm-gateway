@@ -104,7 +104,7 @@ function respondBee(req: http.IncomingMessage, res: http.ServerResponse, body: B
     respondSite(res, '<!DOCTYPE html><h1>home</h1>')
   } else if (url === '/bzz/site.eth/') {
     respondSite(res, SITE_HTML)
-  } else if (url === '/bytes/site.eth' && req.method === 'HEAD') {
+  } else if (url === '/bytes/site.eth' && req.method === 'GET') {
     res.writeHead(200, { etag: `"${ENS_SITE}"` })
     res.end()
   } else if (url === `/feeds/${OWNER}/${TOPIC}`) {

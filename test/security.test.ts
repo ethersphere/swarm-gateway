@@ -9,6 +9,7 @@ import { AddressInfo } from 'node:net'
 import { after, before, describe, it, mock } from 'node:test'
 import { AppConfig } from '../src/config'
 import * as Database from '../src/database/Database'
+import { logger } from '../src/logger'
 import { addRuleHashes, getReferenceSegment, getRuleHash } from '../src/proxy'
 import { createApp } from '../src/server'
 import * as Feed from '../src/services/feed'
@@ -33,10 +34,12 @@ const bee = http.createServer((req, res) => {
   beeRequests.push(`${req.method} ${req.url}`)
   req.resume()
   const url = req.url ?? ''
-  if (req.method === 'HEAD') {
-    const reference = ENS_RECORDS[url.toLowerCase()]
-    res.writeHead(reference ? 200 : 404, reference ? { etag: `"${reference}"` } : {})
+  const reference = ENS_RECORDS[url.toLowerCase()]
+  if (reference) {
+    res.writeHead(200, req.method === 'GET' ? { etag: `"${reference}"` } : {})
     res.end()
+  } else if (url.endsWith('/slow')) {
+    setTimeout(() => res.end('{}'), 200)
   } else if (url.endsWith('/charset-html')) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     res.end('<html><script>alert(1)</script></html>')
@@ -418,5 +421,19 @@ describe('failing requests', () => {
   it('answers a failed moderation action', { timeout: 5000 }, async () => {
     const body = JSON.stringify({ hash: HASH })
     assert.equal((await request(port, 'POST', '/moderation/deny', { authorization: 'moderator' }, body)).status, 500)
+  })
+
+  it('does not log clients leaving before the response', async () => {
+    const error = mock.method(logger, 'error')
+    const req = http.request({ host: '127.0.0.1', port, path: `/bzz/${HASH}/slow` })
+    req.on('error', () => {})
+    req.end()
+    await new Promise(resolve => setTimeout(resolve, 50))
+    req.destroy()
+    await new Promise(resolve => setTimeout(resolve, 300))
+    assert.deepEqual(
+      error.mock.calls.filter(x => x.arguments[0] === 'proxy failed'),
+      [],
+    )
   })
 })

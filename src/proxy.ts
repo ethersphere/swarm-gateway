@@ -404,7 +404,7 @@ async function fetchAndRespond(
       res.end()
     }
   } catch (error) {
-    if (res.headersSent) {
+    if (res.headersSent || res.destroyed) {
       logger.debug('proxy stream interrupted', error)
       res.destroy()
     } else if (error instanceof Error && error.cause === PAYLOAD_TOO_LARGE) {
