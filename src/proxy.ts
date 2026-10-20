@@ -64,6 +64,11 @@ const UNFORWARDED_RESPONSE_HEADERS = new Set([
   'last-modified',
   'cache-control',
 ])
+const CORS_LIST_HEADERS = new Set([
+  'access-control-allow-headers',
+  'access-control-allow-methods',
+  'access-control-expose-headers',
+])
 
 interface Options {
   beeApiUrl: string
@@ -372,7 +377,9 @@ async function fetchAndRespond(
     }
 
     for (const [key, value] of response.headers) {
-      if (!UNFORWARDED_RESPONSE_HEADERS.has(key)) {
+      if (CORS_LIST_HEADERS.has(key)) {
+        res.set(key, mergeLists(res.get(key), value))
+      } else if (!UNFORWARDED_RESPONSE_HEADERS.has(key)) {
         res.set(key, value)
       }
     }
@@ -407,6 +414,26 @@ async function fetchAndRespond(
       discard(response)
     }
   }
+}
+
+function mergeLists(current: string | undefined, addition: string): string {
+  if (!current) {
+    return addition
+  }
+  const existing = current
+    .toLowerCase()
+    .split(',')
+    .map(x => x.trim())
+  let merged = current
+  for (const item of addition.split(',')) {
+    const trimmed = item.trim()
+    const lowercase = trimmed.toLowerCase()
+    if (trimmed && !existing.includes(lowercase)) {
+      existing.push(lowercase)
+      merged += `, ${trimmed}`
+    }
+  }
+  return merged
 }
 
 function toBeeHeaders(headers: IncomingHttpHeaders): Record<string, string> {

@@ -108,7 +108,11 @@ function respondBee(req: http.IncomingMessage, res: http.ServerResponse, body: B
     res.writeHead(200, { etag: `"${ENS_SITE}"` })
     res.end()
   } else if (url === `/feeds/${OWNER}/${TOPIC}`) {
-    res.writeHead(200, { 'content-type': 'application/octet-stream', 'swarm-feed-index': '0000000000000005' })
+    res.writeHead(200, {
+      'content-type': 'application/octet-stream',
+      'swarm-feed-index': '0000000000000005',
+      'access-control-expose-headers': 'swarm-feed-index, Content-Disposition',
+    })
     res.end(FILE_BYTES.subarray(0, 32))
   } else {
     res.writeHead(404, { 'content-type': 'application/json' })
@@ -428,7 +432,10 @@ describe('downloads', () => {
     const response = await request(port, 'GET', `/feeds/${OWNER}/${TOPIC}`)
     assert.equal(response.status, 200)
     assert.equal(response.headers['swarm-feed-index'], '0000000000000005')
-    assert.match(String(response.headers['access-control-expose-headers']), /Swarm-Feed-Index/)
+    assert.equal(
+      response.headers['access-control-expose-headers'],
+      'Access-Control-Allow-Headers, Swarm-Feed-Index, Content-Disposition',
+    )
   })
 
   it('shows the not found page for unknown references', async () => {
