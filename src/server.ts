@@ -1,8 +1,9 @@
 import { Bee } from '@ethersphere/bee-js'
-import axios from 'axios'
 import bodyParser from 'body-parser'
 import { Arrays, Objects, Strings, Types } from 'cafe-utility'
 import express, { Application, NextFunction, Request, Response } from 'express'
+import { Readable } from 'stream'
+import { pipeline } from 'stream/promises'
 import { checkChallenge, createChallenge } from './challenge'
 import { AppConfig, ReadinessMode } from './config'
 import { ApprovalRequests } from './database/ApprovalRequests'
@@ -232,22 +233,27 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
           Strings.joinUrl([config.beeApiUrl, 'bzz', config.homepage, req.path]) + Objects.toQueryString(req.query, true)
         logger.debug('attempting to fetch homepage', { url })
 
-        const response = await axios.get(url, {
-          responseType: 'arraybuffer',
-        })
+        const response = await fetch(url)
 
+        if (!response.ok || !response.body) {
+          await response.body?.cancel()
+          next()
+          return
+        }
         if (response.status !== 200) {
+          await response.body.cancel()
           logger.error('failed to fetch homepage', { status: response.status })
           res.sendStatus(500)
           return
         }
-        const contentType = response.headers['content-type']
-        res.set('content-type', contentType ? contentType.toString() : 'application/octet-stream')
-        res.send(await response.data)
-
-        return
-      } catch (error) {
-        next()
+        res.set('content-type', response.headers.get('content-type') ?? 'application/octet-stream')
+        await pipeline(Readable.fromWeb(response.body), res)
+      } catch {
+        if (res.headersSent) {
+          res.destroy()
+        } else {
+          next()
+        }
       }
     })
   }

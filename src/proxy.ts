@@ -1,8 +1,9 @@
 import { Reference } from '@ethersphere/bee-js'
-import axios from 'axios'
-import { Binary, Cache, Dates, Objects, Strings, Types } from 'cafe-utility'
+import { Binary, Cache, Dates, Objects, Strings } from 'cafe-utility'
 import { Application, Response } from 'express'
 import { IncomingHttpHeaders } from 'http'
+import { Readable } from 'stream'
+import { pipeline } from 'stream/promises'
 import { subdomainToBzz } from './bzz-link'
 import { AllowedUserAgents } from './database/AllowedUserAgents'
 import { getOnlyRowOrNull } from './database/Database'
@@ -33,6 +34,30 @@ const SWARM_PIN_HEADER = 'swarm-pin'
 const DOT_SEGMENT = /(^|[/\\])\.\.?([/\\]|$)/
 const REFERENCE_SEGMENT = /^\/?(?:bzz|bytes|chunks)\/([^/]+)/
 const ENS_NAME = /\.eth$/i
+const NOT_FOUND_MESSAGE = 'address not found or incorrect'
+const NOT_FOUND_PEEK_LENGTH = 100
+const HTML_PEEK_LENGTH = 50
+const EMPTY_HEAD = Buffer.alloc(0)
+const UNFORWARDED_REQUEST_HEADERS = new Set([
+  'host',
+  'connection',
+  'keep-alive',
+  'transfer-encoding',
+  'upgrade',
+  'expect',
+  'content-length',
+  'content-encoding',
+])
+const UNFORWARDED_RESPONSE_HEADERS = new Set([
+  'content-length',
+  'content-encoding',
+  'transfer-encoding',
+  'connection',
+  'keep-alive',
+  'etag',
+  'last-modified',
+  'cache-control',
+])
 
 interface Options {
   beeApiUrl: string
@@ -126,60 +151,36 @@ async function fetchAndRespond(
     delete headers[SWARM_PIN_HEADER]
   }
 
+  let response: globalThis.Response | null = null
   try {
     if (method === 'POST' && !headers[SWARM_PRESIGNED_HEADER] && options.stampManager.enabled) {
       headers[SWARM_STAMP_HEADER] = options.stampManager.getPostageStamp(path.startsWith('/soc/'))
     }
-    if (body && Buffer.isBuffer(body)) {
-      body = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength)
-    }
-    let response = await axios({
+    const queryString = Objects.toQueryString(query, true)
+    const init: RequestInit = {
       method,
-      url: Strings.joinUrl([options.beeApiUrl, path]) + Objects.toQueryString(query, true),
-      data: body,
-      headers,
-      timeout: Dates.minutes(20),
-      validateStatus: status => status < 500,
-      responseType: 'arraybuffer',
-      maxRedirects: 0,
-    })
+      headers: toBeeHeaders(headers),
+      body: method === 'POST' && Buffer.isBuffer(body) ? body : null,
+      redirect: 'manual',
+    }
+    response = await fetchBee(Strings.joinUrl([options.beeApiUrl, path]) + queryString, init)
 
     if (response.status === 404 || (response.status >= 300 && response.status < 400)) {
-      const uglyUrls = [Strings.joinUrl([options.beeApiUrl, path, 'index.html']) + Objects.toQueryString(query, true)]
+      const uglyUrls = [Strings.joinUrl([options.beeApiUrl, path, 'index.html']) + queryString]
       if (!path.endsWith('/')) {
-        uglyUrls.push(Strings.joinUrl([options.beeApiUrl, path]) + '.html' + Objects.toQueryString(query, true))
+        uglyUrls.push(Strings.joinUrl([options.beeApiUrl, path]) + '.html' + queryString)
       }
       for (const uglyUrl of uglyUrls) {
-        const probeResponse = await axios({
-          method,
-          url: uglyUrl,
-          data: body,
-          headers,
-          timeout: Dates.minutes(20),
-          validateStatus: status => status < 500,
-          responseType: 'arraybuffer',
-          maxRedirects: 0,
-        })
+        const probeResponse = await fetchBee(uglyUrl, init)
 
-        if (probeResponse.status >= 200 && probeResponse.status < 300) {
+        if (probeResponse.ok) {
+          discard(response)
           response = probeResponse
+        } else {
+          discard(probeResponse)
         }
       }
     }
-
-    if (response.status === 404) {
-      const sliceFn = Objects.getDeep(response.data, 'slice')
-      if (Types.isFunction(sliceFn)) {
-        const text = (sliceFn.call(response.data, 0, 100) as Buffer).toString('utf8')
-        if (text.includes('address not found or incorrect')) {
-          res.status(404).contentType('text/html').send(getNotFoundPage())
-          return
-        }
-      }
-    }
-
-    let isHtml = false
-    let typeLabel: string | null = null
 
     const typeHints = await Cache.get<TypeHintsRow[]>('typeHints', Dates.minutes(1), async () => {
       try {
@@ -191,33 +192,38 @@ async function fetchAndRespond(
       }
     })
 
-    const sliceFn = Objects.getDeep(response.data, 'slice')
-    if (Types.isFunction(sliceFn)) {
-      const beginning = (sliceFn.call(response.data, 0, 50) as Buffer).toString('utf8')
-      isHtml = beginning.toLowerCase().includes('<!doctype html')
+    const isUpload = method === 'POST' && (path === '/bytes' || path === '/bzz') && response.ok
+    let headLength = isUpload ? Infinity : NOT_FOUND_PEEK_LENGTH
+    for (const typeHint of typeHints) {
+      headLength = Math.max(headLength, typeHint.byteStart + typeHint.byteLength)
+    }
+    const head = response.body ? await readHead(response.body, headLength) : EMPTY_HEAD
 
-      const matchingTypeHint = typeHints.find(typeHint => {
-        const actualHash = Binary.keccak256(sliceFn.call(response.data, typeHint.byteStart, typeHint.byteLength))
-        const expectedHash = Binary.hexToUint8Array(typeHint.hash)
-        return Binary.equals(actualHash, expectedHash)
-      })
+    if (response.status === 404 && head.toString('utf8', 0, NOT_FOUND_PEEK_LENGTH).includes(NOT_FOUND_MESSAGE)) {
+      res.status(404).contentType('text/html').send(getNotFoundPage())
+      return
+    }
 
-      if (matchingTypeHint) {
-        typeLabel = matchingTypeHint.label
-      }
+    let isHtml = head.toString('utf8', 0, HTML_PEEK_LENGTH).toLowerCase().includes('<!doctype html')
+    let typeLabel: string | null = null
+
+    const matchingTypeHint = typeHints.find(typeHint => {
+      const actualHash = Binary.keccak256(head.subarray(typeHint.byteStart, typeHint.byteLength))
+      const expectedHash = Binary.hexToUint8Array(typeHint.hash)
+      return Binary.equals(actualHash, expectedHash)
+    })
+
+    if (matchingTypeHint) {
+      typeLabel = matchingTypeHint.label
     }
 
     if (!isHtml) {
-      const contentType = String(response.headers['content-type'] ?? '').toLowerCase()
+      const contentType = (response.headers.get('content-type') ?? '').toLowerCase()
       if (contentType.startsWith('text/html') || contentType.startsWith('application/xhtml+xml')) {
         isHtml = true
-      } else if ((response.headers['content-disposition'] || '').toLowerCase().includes('.htm')) {
+      } else if ((response.headers.get('content-disposition') ?? '').toLowerCase().includes('.htm')) {
         isHtml = true
       }
-    }
-
-    if (isHtml) {
-      response.headers['content-type'] = 'text/html'
     }
 
     const settings = await Cache.get<SettingsRow>('settings', Dates.minutes(1), async () => {
@@ -290,14 +296,9 @@ async function fetchAndRespond(
       return
     }
 
-    if (
-      method === 'POST' &&
-      (path === '/bytes' || path === '/bzz') &&
-      response.status >= 200 &&
-      response.status < 300
-    ) {
+    if (isUpload) {
       try {
-        const json = JSON.parse(Buffer.from(response.data).toString('utf8'))
+        const json = JSON.parse(head.toString('utf8'))
         if (json.reference) {
           logger.info('upload', { path, reference: json.reference })
         }
@@ -306,17 +307,83 @@ async function fetchAndRespond(
       }
     }
 
-    delete response.headers['content-length']
-    delete response.headers['content-encoding']
-    delete response.headers['transfer-encoding']
-    delete response.headers.connection
-    delete response.headers.etag
-    delete response.headers['last-modified']
-    delete response.headers['cache-control']
-
-    res.set(response.headers).status(response.status).send(response.data)
+    for (const [key, value] of response.headers) {
+      if (!UNFORWARDED_RESPONSE_HEADERS.has(key)) {
+        res.set(key, value)
+      }
+    }
+    const contentLength = response.headers.get('content-length')
+    if (contentLength && !response.headers.has('content-encoding')) {
+      res.set('content-length', contentLength)
+    }
+    if (isHtml) {
+      res.set('content-type', 'text/html')
+    }
+    res.status(response.status)
+    if (head.byteLength) {
+      res.write(head)
+    }
+    if (response.body) {
+      await pipeline(Readable.fromWeb(response.body), res)
+    } else {
+      res.end()
+    }
   } catch (error) {
-    logger.error('proxy failed', error)
-    res.sendStatus(500)
+    if (res.headersSent) {
+      logger.debug('proxy stream interrupted', error)
+      res.destroy()
+    } else {
+      logger.error('proxy failed', error)
+      res.sendStatus(500)
+    }
+  } finally {
+    if (response) {
+      discard(response)
+    }
+  }
+}
+
+function toBeeHeaders(headers: IncomingHttpHeaders): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const key in headers) {
+    const value = headers[key]
+    if (value !== undefined && !UNFORWARDED_REQUEST_HEADERS.has(key)) {
+      result[key] = Array.isArray(value) ? value.join(', ') : value
+    }
+  }
+  return result
+}
+
+async function fetchBee(url: string, init: RequestInit): Promise<globalThis.Response> {
+  const response = await fetch(url, init)
+  if (response.status >= 500) {
+    discard(response)
+    throw Error(`bee responded with ${response.status} for ${url}`)
+  }
+  return response
+}
+
+async function readHead(body: ReadableStream<Uint8Array>, length: number): Promise<Buffer> {
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (total < length) {
+      const chunk = await reader.read()
+      if (chunk.done) {
+        break
+      }
+      chunks.push(chunk.value)
+      total += chunk.value.byteLength
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  return Buffer.concat(chunks, total)
+}
+
+function discard(response: globalThis.Response) {
+  if (response.body && !response.body.locked) {
+    response.body.cancel().catch(() => {})
   }
 }
