@@ -9,6 +9,7 @@ import { Settings, SettingsRow, SettingsRowId } from './database/Settings'
 import { TypeHints, TypeHintsRow } from './database/TypeHints'
 import { logger } from './logger'
 import { getNotFoundPage } from './not-found'
+import { POSTAGE_TOKEN_HEADER, PostageBatchDispenserService } from './services/postage-batch-dispenser'
 import { StampManager } from './stamp'
 
 export const GET_PROXY_ENDPOINTS = ['/chunks/*', '/bytes/*', '/bzz/*', '/feeds/*']
@@ -33,6 +34,7 @@ interface Options {
   removePinHeader: boolean
   instanceName?: string | undefined
   stampManager: StampManager
+  postageBatchDispenser: PostageBatchDispenserService
   hostname?: string
 }
 
@@ -91,9 +93,26 @@ async function fetchAndRespond(
     delete headers[SWARM_PIN_HEADER]
   }
 
+  const postageToken = headers[POSTAGE_TOKEN_HEADER]
+  delete headers[POSTAGE_TOKEN_HEADER]
+
   try {
-    if (method === 'POST' && !headers[SWARM_PRESIGNED_HEADER] && options.stampManager.enabled) {
-      headers[SWARM_STAMP_HEADER] = options.stampManager.getPostageStamp(path.startsWith('/soc/'))
+    if (method === 'POST' && !headers[SWARM_PRESIGNED_HEADER]) {
+      if (options.postageBatchDispenser.enabled) {
+        delete headers[SWARM_STAMP_HEADER]
+      }
+
+      if (options.postageBatchDispenser.enabled && Types.isString(postageToken)) {
+        const batchId = await options.postageBatchDispenser.resolveToken(postageToken)
+
+        if (!batchId) {
+          res.status(401).send({ error: 'unknown or inactive postage token' })
+          return
+        }
+        headers[SWARM_STAMP_HEADER] = batchId
+      } else if (options.stampManager.enabled) {
+        headers[SWARM_STAMP_HEADER] = options.stampManager.getPostageStamp(path.startsWith('/soc/'))
+      }
     }
     if (body && Buffer.isBuffer(body)) {
       body = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength)

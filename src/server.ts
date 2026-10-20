@@ -15,9 +15,14 @@ import { createProxyEndpoints } from './proxy'
 import { checkReadiness } from './readiness'
 import { resolveFeed } from './services/feed'
 import { sendMattermostAlert } from './services/mattermost'
+import { PostageBatchDispenserService } from './services/postage-batch-dispenser'
 import { StampManager } from './stamp'
 
-export function createApp(config: AppConfig, stampManager: StampManager): Application {
+export function createApp(
+  config: AppConfig,
+  stampManager: StampManager,
+  postageBatchDispenser: PostageBatchDispenserService,
+): Application {
   const bee = new Bee(config.beeApiUrl)
   const app = express()
 
@@ -30,7 +35,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
     res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     res.set(
       'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, Content-Disposition, swarm-postage-batch-id, swarm-postage-stamp, swarm-deferred-upload, swarm-encrypt, swarm-collection, swarm-redundancy-level',
+      'Content-Type, Authorization, Content-Disposition, swarm-postage-batch-id, swarm-postage-stamp, x-swarm-postage-token, swarm-deferred-upload, swarm-encrypt, swarm-collection, swarm-redundancy-level',
     )
     // Let browser clients read the allow-list (not a safelisted response header) so they
     // can drop headers this gateway refuses, and read Swarm-Feed-Index off feed responses.
@@ -212,6 +217,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
     beeApiUrl: config.beeApiUrl,
     removePinHeader: config.removePinHeader ?? true,
     stampManager,
+    postageBatchDispenser,
     hostname: config.hostname,
     instanceName: config.instanceName,
   })

@@ -1,10 +1,17 @@
 #!/usr/bin/env node
 import { Dates, Types } from 'cafe-utility'
-import { EnvironmentVariables, getAppConfig, getServerConfig, getStampConfig } from './config'
+import {
+  EnvironmentVariables,
+  getAppConfig,
+  getPostageBatchDispenserConfig,
+  getServerConfig,
+  getStampConfig,
+} from './config'
 import { logger, subscribeLogServerRequests } from './logger'
 import { runMigrations } from './migration'
 import { createApp } from './server'
 import { startFeedMonitor } from './services/feed-monitor'
+import { PostageBatchDispenserService } from './services/postage-batch-dispenser'
 import { setupSchema } from './setup'
 import { StampManager } from './stamp'
 
@@ -23,11 +30,16 @@ async function main() {
   const stampManager = new StampManager(appConfig.beeApiUrl, stampConfig)
   stampManager.start()
 
+  const postageBatchDispenser = new PostageBatchDispenserService(
+    getPostageBatchDispenserConfig(process.env as EnvironmentVariables),
+  )
+  logger.info(`postage batch dispenser ${postageBatchDispenser.enabled ? 'enabled' : 'disabled'}`)
+
   if (process.env.DATABASE_CONFIG && process.env.DATABASE_CONFIG !== '{}') {
     startFeedMonitor(appConfig.beeApiUrl)
   }
 
-  const app = createApp(appConfig, stampManager)
+  const app = createApp(appConfig, stampManager, postageBatchDispenser)
 
   const server = app.listen(serverConfig.port, () => {
     logger.info(`starting server at ${serverConfig.hostname}:${serverConfig.port}`)
