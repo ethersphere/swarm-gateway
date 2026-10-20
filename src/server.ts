@@ -1,7 +1,7 @@
 import { Bee } from '@ethersphere/bee-js'
 import axios from 'axios'
 import bodyParser from 'body-parser'
-import { Arrays, Strings, Types } from 'cafe-utility'
+import { Arrays, Objects, Strings, Types } from 'cafe-utility'
 import express, { Application, NextFunction, Request, Response } from 'express'
 import { checkChallenge, createChallenge } from './challenge'
 import { AppConfig, ReadinessMode } from './config'
@@ -11,7 +11,7 @@ import { Reports } from './database/Reports'
 import { Rules } from './database/Rules'
 import { logger } from './logger'
 import { register } from './metrics'
-import { createProxyEndpoints } from './proxy'
+import { createProxyEndpoints, hasDotSegment } from './proxy'
 import { checkReadiness } from './readiness'
 import { resolveFeed } from './services/feed'
 import { sendMattermostAlert } from './services/mattermost'
@@ -43,6 +43,15 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
     next()
   })
 
+  app.use((req, res, next) => {
+    if (hasDotSegment(req.path)) {
+      res.status(400)
+      res.send({ error: 'bad path' })
+      return
+    }
+    next()
+  })
+
   const subdomainOffset = config.hostname.split('.').length
   app.set('subdomain offset', subdomainOffset)
 
@@ -51,7 +60,7 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
       if (req.headers.authorization === config.authorization) {
         next()
       } else if (
-        req.method !== 'post' &&
+        req.method !== 'POST' &&
         Arrays.getBooleanArgument(process.argv, 'soft-auth', process.env, 'SOFT_AUTH')
       ) {
         next()
@@ -219,7 +228,8 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   if (config.homepage) {
     app.use(async (req, res, next) => {
       try {
-        const url = Strings.joinUrl([config.beeApiUrl, 'bzz', config.homepage, req.url])
+        const url =
+          Strings.joinUrl([config.beeApiUrl, 'bzz', config.homepage, req.path]) + Objects.toQueryString(req.query, true)
         logger.debug('attempting to fetch homepage', { url })
 
         const response = await axios.get(url, {

@@ -6,8 +6,9 @@
     "build": "tsc",
     "check": "tsc --noEmit",
     "depcheck": "depcheck",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\""
+    "format": "prettier --write \"{src,test}/**/*.ts\"",
+    "format:check": "prettier --check \"{src,test}/**/*.ts\"",
+    "test": "tsc -p tsconfig.test.json && node --test build-test/test/*.test.js"
   },
   "license": "BSD-3-Clause",
   "dependencies": {

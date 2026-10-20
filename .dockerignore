@@ -4,3 +4,4 @@ dist
 .github
 .claude
 *.md
+build-test

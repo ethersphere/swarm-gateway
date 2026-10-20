@@ -1,14 +1,17 @@
+import { Reference } from '@ethersphere/bee-js'
 import axios from 'axios'
 import { Binary, Cache, Dates, Objects, Strings, Types } from 'cafe-utility'
 import { Application, Response } from 'express'
 import { IncomingHttpHeaders } from 'http'
 import { subdomainToBzz } from './bzz-link'
 import { AllowedUserAgents } from './database/AllowedUserAgents'
-import { Rules } from './database/Rules'
+import { getOnlyRowOrNull } from './database/Database'
+import { RulesRow } from './database/Rules'
 import { Settings, SettingsRow, SettingsRowId } from './database/Settings'
 import { TypeHints, TypeHintsRow } from './database/TypeHints'
 import { logger } from './logger'
 import { getNotFoundPage } from './not-found'
+import { resolveEnsReferences } from './services/ens'
 import { StampManager } from './stamp'
 
 export const GET_PROXY_ENDPOINTS = ['/chunks/*', '/bytes/*', '/bzz/*', '/feeds/*']
@@ -27,6 +30,9 @@ const BAD_PATH = `bzz/${'00'.repeat(32)}`
 const SWARM_STAMP_HEADER = 'swarm-postage-batch-id'
 const SWARM_PRESIGNED_HEADER = 'swarm-postage-stamp'
 const SWARM_PIN_HEADER = 'swarm-pin'
+const DOT_SEGMENT = /(^|[/\\])\.\.?([/\\]|$)/
+const REFERENCE_SEGMENT = /^\/?(?:bzz|bytes|chunks)\/([^/]+)/
+const ENS_NAME = /\.eth$/i
 
 interface Options {
   beeApiUrl: string
@@ -34,6 +40,35 @@ interface Options {
   instanceName?: string | undefined
   stampManager: StampManager
   hostname?: string
+}
+
+export function hasDotSegment(path: string): boolean {
+  if (!path.includes('%')) {
+    return DOT_SEGMENT.test(path)
+  }
+  try {
+    return DOT_SEGMENT.test(decodeURIComponent(path))
+  } catch {
+    return true
+  }
+}
+
+export function getReferenceSegment(path: string): string | undefined {
+  return REFERENCE_SEGMENT.exec(path)?.[1]
+}
+
+export function getRuleHash(subject: string): string | null {
+  return Strings.searchSubstring(subject, x => x.length > 48 && x.startsWith('bah')) || Strings.searchHex(subject, 64)
+}
+
+export function addRuleHashes(hashes: string[], hash: string): string[] {
+  try {
+    const reference = new Reference(hash)
+    hashes.push(reference.toHex(), reference.toCid('manifest'), reference.toCid('feed'))
+  } catch {
+    hashes.push(hash)
+  }
+  return hashes
 }
 
 export function createProxyEndpoints(app: Application, options: Options) {
@@ -173,7 +208,8 @@ async function fetchAndRespond(
     }
 
     if (!isHtml) {
-      if (response.headers['content-type'] === 'text/html') {
+      const contentType = String(response.headers['content-type'] ?? '').toLowerCase()
+      if (contentType.startsWith('text/html') || contentType.startsWith('application/xhtml+xml')) {
         isHtml = true
       } else if ((response.headers['content-disposition'] || '').toLowerCase().includes('.htm')) {
         isHtml = true
@@ -192,7 +228,8 @@ async function fetchAndRespond(
       return row || DEFAULT_SETTINGS
     })
 
-    const isEns = path.includes('.eth')
+    const reference = getReferenceSegment(path)
+    const isEns = reference !== undefined && ENS_NAME.test(reference)
 
     let allowed = typeLabel
       ? true
@@ -218,10 +255,22 @@ async function fetchAndRespond(
       allowed = true
     }
 
-    const currentCid = Strings.searchSubstring(path, x => x.length > 48 && x.startsWith('bah'))
-    const currentHash = Strings.searchHex(path, 64)
-    const hash = currentCid || currentHash
-    const rule = hash ? await Rules.getOneOrNull({ hash }).catch(() => null) : null
+    const hash = getRuleHash(reference ?? path)
+    const hashes: string[] = []
+    if (hash) {
+      addRuleHashes(hashes, hash)
+    }
+    if (isEns) {
+      for (const ensHash of await resolveEnsReferences(options.beeApiUrl, reference)) {
+        addRuleHashes(hashes, ensHash)
+      }
+    }
+    const rule = hashes.length
+      ? ((await getOnlyRowOrNull(
+          `SELECT hash, mode FROM rules WHERE hash IN (?) ORDER BY mode = 'deny' DESC LIMIT 1`,
+          hashes,
+        ).catch(() => null)) as Pick<RulesRow, 'hash' | 'mode'> | null)
+      : null
 
     if (rule) {
       if (rule.mode === 'deny') {
@@ -232,8 +281,9 @@ async function fetchAndRespond(
     }
 
     if (!allowed) {
-      if (hash) {
-        res.redirect(`${settings.redirectUri}/forbidden?hash=${hash}`)
+      const forbiddenHash = rule?.hash ?? hash
+      if (forbiddenHash) {
+        res.redirect(`${settings.redirectUri}/forbidden?hash=${forbiddenHash}`)
       } else {
         res.redirect(`${settings.redirectUri}/forbidden`)
       }
