@@ -1,5 +1,4 @@
 import { Bee, FeedIndex, MantarayNode } from '@ethersphere/bee-js'
-import axios from 'axios'
 import { Dates, Strings } from 'cafe-utility'
 import { logger } from '../logger'
 
@@ -67,17 +66,14 @@ async function readFeedCoordinates(bee: Bee, hash: string): Promise<{ owner: str
 
 async function resolveFeedIndexFromHeader(beeApiUrl: string, hash: string): Promise<FeedState | null> {
   try {
-    const response = await axios({
-      method: 'GET',
-      url: Strings.joinUrl([beeApiUrl, 'bzz', hash]) + '/',
+    const response = await fetch(Strings.joinUrl([beeApiUrl, 'bzz', hash]) + '/', {
       headers: { Range: 'bytes=0-0' },
-      timeout: Dates.seconds(30),
-      validateStatus: status => status < 500,
-      maxRedirects: 0,
-      responseType: 'arraybuffer',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(Dates.seconds(30)),
     })
-    const index = response.headers['swarm-feed-index']
-    return typeof index === 'string' && index.length > 0
+    await response.body?.cancel()
+    const index = response.headers.get('swarm-feed-index')
+    return response.status < 500 && index
       ? { index: canonicalIndex(new FeedIndex(index)), reference: null, owner: null, topic: null }
       : null
   } catch (error) {

@@ -1,4 +1,3 @@
-import axios from 'axios'
 import { Cache, Dates, Strings } from 'cafe-utility'
 import { logger } from '../logger'
 import { resolveFeed } from './feed'
@@ -6,11 +5,15 @@ import { resolveFeed } from './feed'
 export async function resolveEnsReferences(beeApiUrl: string, name: string): Promise<string[]> {
   try {
     return await Cache.get(`ens:${name}`, Dates.minutes(1), async () => {
-      const response = await axios.head(Strings.joinUrl([beeApiUrl, 'bytes', name]), {
-        timeout: Dates.seconds(30),
-        maxRedirects: 0,
+      const response = await fetch(Strings.joinUrl([beeApiUrl, 'bytes', name]), {
+        method: 'HEAD',
+        redirect: 'manual',
+        signal: AbortSignal.timeout(Dates.seconds(30)),
       })
-      const reference = Strings.searchHex(String(response.headers.etag ?? ''), 64)
+      if (!response.ok) {
+        throw Error(`ens resolution responded with ${response.status} for ${name}`)
+      }
+      const reference = Strings.searchHex(response.headers.get('etag') ?? '', 64)
       if (!reference) {
         throw Error(`no reference in ETag for ${name}`)
       }
