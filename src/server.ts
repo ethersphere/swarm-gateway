@@ -3,6 +3,7 @@ import axios from 'axios'
 import bodyParser from 'body-parser'
 import { Arrays, Strings, Types } from 'cafe-utility'
 import express, { Application, NextFunction, Request, Response } from 'express'
+import { isServableSubdomain } from './bzz-link'
 import { checkChallenge, createChallenge } from './challenge'
 import { AppConfig, ReadinessMode } from './config'
 import { ApprovalRequests } from './database/ApprovalRequests'
@@ -79,9 +80,16 @@ export function createApp(
   app.get('/health', (_req, res) => res.sendStatus(200))
 
   if (config.hostname) {
-    app.get('/tls-check', (req, res) => {
-      const domain = req.query.domain as string
-      const valid = domain === config.hostname || domain.endsWith(`.${config.hostname}`)
+    app.get('/tls-check', async (req, res) => {
+      const domain = String(req.query.domain ?? '')
+
+      if (domain === config.hostname) {
+        res.sendStatus(200)
+        return
+      }
+      const suffix = `.${config.hostname}`
+      const valid =
+        domain.endsWith(suffix) && (await isServableSubdomain(domain.slice(0, -suffix.length), config.beeApiUrl))
       res.sendStatus(valid ? 200 : 403)
     })
   }
