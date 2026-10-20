@@ -16,8 +16,8 @@ import { getNotFoundPage } from './not-found'
 import { resolveEnsReferences } from './services/ens'
 import { StampManager } from './stamp'
 
-export const GET_PROXY_ENDPOINTS = ['/chunks/*', '/bytes/*', '/bzz/*', '/feeds/*']
-export const POST_PROXY_ENDPOINTS = ['/chunks', '/bytes', '/bzz', '/soc/*', '/feeds/*']
+export const GET_PROXY_ENDPOINTS = ['/chunks/*path', '/bytes/*path', '/bzz/*path', '/feeds/*path']
+export const POST_PROXY_ENDPOINTS = ['/chunks', '/bytes', '/bzz', '/soc/*path', '/feeds/*path']
 
 const DEFAULT_SETTINGS: SettingsRow = {
   id: -1 as SettingsRowId,

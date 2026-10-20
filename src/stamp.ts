@@ -1,69 +1,35 @@
 import { BatchId, Bee } from '@ethersphere/bee-js'
 import { Arrays, Dates, System, Types } from 'cafe-utility'
-import client from 'prom-client'
 import { ERROR_NO_STAMP, StampConfig } from './config'
 import { logger } from './logger'
-import { register } from './metrics'
+import { createMetric } from './metrics'
 
-const stampPurchaseCounter = new client.Counter({
-  name: 'stamp_purchase_counter',
-  help: 'How many stamps were purchased',
-})
-register.registerMetric(stampPurchaseCounter)
-
-const stampPurchaseFailedCounter = new client.Counter({
-  name: 'stamp_purchase_failed_counter',
-  help: 'How many stamps failed to be purchased',
-})
-register.registerMetric(stampPurchaseFailedCounter)
-
-const stampTopupCounter = new client.Counter({
-  name: 'stamp_topup_counter',
-  help: 'How many topups were made',
-})
-register.registerMetric(stampPurchaseCounter)
-
-const stampPurchaseTopupCounter = new client.Counter({
-  name: 'stamp_topup_failed_counter',
-  help: 'How many topups failed',
-})
-register.registerMetric(stampPurchaseFailedCounter)
-
-const stampCheckCounter = new client.Counter({
-  name: 'stamp_check_counter',
-  help: 'How many times were stamps retrieved from server',
-})
-register.registerMetric(stampCheckCounter)
-
-const stampGetCounter = new client.Counter({
-  name: 'stamp_get_counter',
-  help: 'How many times was get postageStamp called',
-})
-register.registerMetric(stampGetCounter)
-
-const stampGetErrorCounter = new client.Counter({
-  name: 'stamp_get_error_counter',
-  help: 'How many times was get postageStamp called and there was no valid postage stamp',
-})
-register.registerMetric(stampGetErrorCounter)
-
-const stampTtlGauge = new client.Gauge({
-  name: 'stamp_ttl_gauge',
-  help: 'TTL on the selected automanaged stamp',
-})
-register.registerMetric(stampTtlGauge)
-
-const stampUsageGauge = new client.Gauge({
-  name: 'stamp_usage_gauge',
-  help: 'Usage on the selected automanaged stamp',
-})
-register.registerMetric(stampUsageGauge)
-
-const stampUsableCountGauge = new client.Gauge({
-  name: 'stamp_usable_count_gauge',
-  help: 'How many stamps exist on the bee node that can be used',
-})
-register.registerMetric(stampUsableCountGauge)
+const stampPurchaseCounter = createMetric('counter', 'stamp_purchase_counter', 'How many stamps were purchased')
+const stampPurchaseFailedCounter = createMetric(
+  'counter',
+  'stamp_purchase_failed_counter',
+  'How many stamps failed to be purchased',
+)
+const stampTopupCounter = createMetric('counter', 'stamp_topup_counter', 'How many topups were made')
+const stampPurchaseTopupCounter = createMetric('counter', 'stamp_topup_failed_counter', 'How many topups failed')
+const stampCheckCounter = createMetric(
+  'counter',
+  'stamp_check_counter',
+  'How many times were stamps retrieved from server',
+)
+const stampGetCounter = createMetric('counter', 'stamp_get_counter', 'How many times was get postageStamp called')
+const stampGetErrorCounter = createMetric(
+  'counter',
+  'stamp_get_error_counter',
+  'How many times was get postageStamp called and there was no valid postage stamp',
+)
+const stampTtlGauge = createMetric('gauge', 'stamp_ttl_gauge', 'TTL on the selected automanaged stamp')
+const stampUsageGauge = createMetric('gauge', 'stamp_usage_gauge', 'Usage on the selected automanaged stamp')
+const stampUsableCountGauge = createMetric(
+  'gauge',
+  'stamp_usable_count_gauge',
+  'How many stamps exist on the bee node that can be used',
+)
 
 export class StampManager {
   private bee: Bee
@@ -103,7 +69,7 @@ export class StampManager {
   }
 
   getPostageStamp(soc = false): string {
-    stampGetCounter.inc()
+    stampGetCounter.value++
 
     if (soc && this.stampSoc) {
       return this.stampSoc.toHex()
@@ -113,7 +79,7 @@ export class StampManager {
       return this.stamp.toHex()
     }
 
-    stampGetErrorCounter.inc()
+    stampGetErrorCounter.value++
     throw Error(ERROR_NO_STAMP)
   }
 
@@ -121,7 +87,7 @@ export class StampManager {
     const amount = Types.asNumber(this.config.postageAmount)
     const depth = Types.asNumber(this.config.postageDepth)
 
-    stampCheckCounter.inc()
+    stampCheckCounter.value++
     const stamps = (await this.bee.stamp.getAll()).filter(
       x => x.usable && x.depth === this.config.postageDepth && x.usage < this.config.postageThresholdUsage,
     )
@@ -151,18 +117,18 @@ export class StampManager {
       }
     }
 
-    stampTtlGauge.set(currentStamp.duration.toSeconds())
-    stampUsageGauge.set(currentStamp.usage)
-    stampUsableCountGauge.set(stamps.length)
+    stampTtlGauge.value = currentStamp.duration.toSeconds()
+    stampUsageGauge.value = currentStamp.usage
+    stampUsableCountGauge.value = stamps.length
   }
 
   async topup(batchId: BatchId, amount: number): Promise<void> {
     try {
       logger.info(`topping up stamp ${batchId.toHex()} with ${amount}`)
       await this.bee.stamp.topUp(batchId, amount.toString())
-      stampTopupCounter.inc()
+      stampTopupCounter.value++
     } catch (error) {
-      stampPurchaseTopupCounter.inc()
+      stampPurchaseTopupCounter.value++
       throw error
     }
   }
@@ -172,10 +138,10 @@ export class StampManager {
       logger.info(`buying new stamp with amount ${amount} and depth ${depth}, reason: ${reason}`)
       const batchId = await this.bee.stamp.create(amount.toString(), depth)
       logger.info('successfully bought new stamp', batchId.toHex())
-      stampPurchaseCounter.inc()
+      stampPurchaseCounter.value++
       return batchId
     } catch (error) {
-      stampPurchaseFailedCounter.inc()
+      stampPurchaseFailedCounter.value++
       throw error
     }
   }
