@@ -2,6 +2,7 @@ process.env.LOG_LEVEL = 'critical'
 delete process.env.DATABASE_CONFIG
 
 import { Reference } from '@ethersphere/bee-js'
+import { Binary, Cache } from 'cafe-utility'
 import assert from 'node:assert/strict'
 import http, { Server } from 'node:http'
 import { AddressInfo } from 'node:net'
@@ -72,6 +73,7 @@ function request(
   method: string,
   path: string,
   headers: http.OutgoingHttpHeaders = {},
+  body?: string,
 ): Promise<{ status: number; location: string | undefined }> {
   return new Promise((resolve, reject) => {
     const req = http.request({ host: '127.0.0.1', port, method, path, headers }, res => {
@@ -79,7 +81,7 @@ function request(
       res.on('end', () => resolve({ status: res.statusCode ?? 0, location: res.headers.location }))
     })
     req.on('error', reject)
-    req.end()
+    req.end(body)
   })
 }
 
@@ -233,6 +235,7 @@ describe('ens moderation', () => {
     mock.method(Database, 'getOnlyRowOrNull', async (_query: string, ...params: unknown[]) =>
       Array.isArray(params[0]) && params[0].includes(DENIED_HASH) ? { hash: DENIED_HASH, mode: 'deny' } : null,
     )
+    mock.method(Database, 'getRows', async () => [])
     mock.method(Feed, 'resolveFeed', async (_beeApiUrl: string, hash: string) =>
       hash === FEED_MANIFEST ? { index: '1', reference: DENIED_HASH, owner: null, topic: null } : null,
     )
@@ -241,6 +244,7 @@ describe('ens moderation', () => {
 
   after(() => {
     mock.restoreAll()
+    Cache.delete('rewrites')
   })
 
   it('denies a denied hash behind an ens name', async () => {
@@ -267,5 +271,141 @@ describe('ens moderation', () => {
 
   it('falls back to the ens rule when the name does not resolve', async () => {
     assert.equal((await request(port, 'GET', '/bzz/unknown.eth/')).status, 200)
+  })
+})
+
+describe('non-canonical references', () => {
+  let port: number
+
+  const cid = new Reference(DENIED_HASH).toCid('manifest')
+  const upperCid = `B${cid.slice(1).toUpperCase()}`
+  const cidBytes = Buffer.concat([Buffer.from([0x01, 0xfa, 0x01, 0x1b, 0x20]), Buffer.from(DENIED_HASH, 'hex')])
+  const percentEncoded = DENIED_HASH.replace(/./g, x => `%${x.charCodeAt(0).toString(16)}`)
+
+  before(async () => {
+    mock.method(Database, 'getOnlyRowOrNull', async (_query: string, ...params: unknown[]) =>
+      Array.isArray(params[0]) && params[0].includes(DENIED_HASH) ? { hash: DENIED_HASH, mode: 'deny' } : null,
+    )
+    port = await startGateway()
+  })
+
+  after(() => {
+    mock.restoreAll()
+  })
+
+  const bypasses = [
+    `/bzz/${upperCid}/`,
+    `/bzz/f${cidBytes.toString('hex')}/`,
+    `/bzz/m${cidBytes.toString('base64').replace(/=+$/, '')}/`,
+    `/bzz//${upperCid}/`,
+    `/BZZ/${upperCid}/`,
+    `/bytes/f${cidBytes.toString('hex')}`,
+    `/bzz/${percentEncoded}/`,
+  ]
+
+  for (const path of bypasses) {
+    it(`rejects ${path}`, async () => {
+      beeRequests.length = 0
+      assert.equal((await request(port, 'GET', path)).status, 400)
+      assert.deepEqual(beeRequests, [])
+    })
+  }
+
+  const canonical = [
+    `/bzz/${DENIED_HASH}/`,
+    `/bzz/${DENIED_HASH.toUpperCase()}/`,
+    `/bzz/${cid}/`,
+    `/bzz//${DENIED_HASH}/`,
+  ]
+
+  for (const path of canonical) {
+    it(`still denies ${path}`, async () => {
+      assert.equal((await request(port, 'GET', path)).status, 302)
+    })
+  }
+})
+
+describe('subdomain rewrites', () => {
+  let port: number
+
+  before(async () => {
+    Cache.delete('rewrites')
+    mock.method(Database, 'getRows', async (query: string) =>
+      query.includes('FROM rewrites') ? [{ subdomain: 'rewritten', target: OTHER_HASH }] : [],
+    )
+    port = await startGateway()
+  })
+
+  after(() => {
+    mock.restoreAll()
+    Cache.delete('rewrites')
+  })
+
+  it('resolves every subdomain on its own', async () => {
+    const expected = [
+      ['plain', 'plain.eth'],
+      ['rewritten', OTHER_HASH],
+      ['another', 'another.eth'],
+    ]
+    for (const [subdomain, target] of expected) {
+      beeRequests.length = 0
+      await request(port, 'GET', '/', { host: `${subdomain}.gw.local` })
+      assert.ok(beeRequests.includes(`GET /bzz/${target}/`), `${subdomain}: ${beeRequests.join(', ')}`)
+    }
+  })
+})
+
+describe('type hints', () => {
+  let port: number
+
+  before(async () => {
+    Cache.delete('typeHints')
+    const hash = Binary.uint8ArrayToHex(Binary.keccak256(Buffer.from('<h1>')))
+    mock.method(Database, 'getRows', async (query: string) =>
+      query.includes('FROM typeHints')
+        ? [{ byteStart: '<!DOCTYPE html>'.length, byteLength: 4, hash, label: 'h1' }]
+        : [],
+    )
+    port = await startGateway()
+  })
+
+  after(() => {
+    mock.restoreAll()
+    Cache.delete('typeHints')
+  })
+
+  it('matches bytes at a non-zero offset', async () => {
+    assert.equal((await request(port, 'GET', `/bzz/${HASH}/site`)).status, 200)
+  })
+})
+
+describe('failing requests', () => {
+  let port: number
+
+  before(async () => {
+    mock.method(Database, 'getOnlyRowOrNull', async () => null)
+    port = await startGateway({ moderationSecret: 'moderator' })
+  })
+
+  after(() => {
+    mock.restoreAll()
+  })
+
+  it('answers a malformed approval request', { timeout: 5000 }, async () => {
+    assert.equal((await request(port, 'POST', '/moderation/approval', {}, 'not json')).status, 500)
+  })
+
+  it('rejects an unknown challenge', { timeout: 5000 }, async () => {
+    const body = JSON.stringify({ hash: HASH, challengeId: 1, challengeSolution: '00' })
+    assert.equal((await request(port, 'POST', '/moderation/approval', {}, body)).status, 400)
+  })
+
+  it('answers when the database fails', { timeout: 5000 }, async () => {
+    assert.equal((await request(port, 'POST', '/challenge')).status, 500)
+  })
+
+  it('answers a failed moderation action', { timeout: 5000 }, async () => {
+    const body = JSON.stringify({ hash: HASH })
+    assert.equal((await request(port, 'POST', '/moderation/deny', { authorization: 'moderator' }, body)).status, 500)
   })
 })

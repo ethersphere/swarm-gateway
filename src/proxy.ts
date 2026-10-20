@@ -32,7 +32,9 @@ const SWARM_STAMP_HEADER = 'swarm-postage-batch-id'
 const SWARM_PRESIGNED_HEADER = 'swarm-postage-stamp'
 const SWARM_PIN_HEADER = 'swarm-pin'
 const DOT_SEGMENT = /(^|[/\\])\.\.?([/\\]|$)/
-const REFERENCE_SEGMENT = /^\/?(?:bzz|bytes|chunks)\/([^/]+)/
+const REFERENCE_SEGMENT = /^\/*(?:bzz|bytes|chunks)\/+([^/]+)/i
+const HEX_REFERENCE = /^(?:[0-9a-fA-F]{64}){1,2}$/
+const CID_REFERENCE = /^bah[a-z2-7]+$/
 const ENS_NAME = /\.eth$/i
 const NOT_FOUND_MESSAGE = 'address not found or incorrect'
 const NOT_FOUND_PEEK_LENGTH = 100
@@ -80,6 +82,21 @@ export function hasDotSegment(path: string): boolean {
 
 export function getReferenceSegment(path: string): string | undefined {
   return REFERENCE_SEGMENT.exec(path)?.[1]
+}
+
+export function isCanonicalReference(segment: string): boolean {
+  if (HEX_REFERENCE.test(segment) || ENS_NAME.test(segment)) {
+    return true
+  }
+  if (!CID_REFERENCE.test(segment)) {
+    return false
+  }
+  try {
+    new Reference(segment)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function getRuleHash(subject: string): string | null {
@@ -147,6 +164,12 @@ async function fetchAndRespond(
   res: Response,
   options: Options,
 ) {
+  const reference = getReferenceSegment(path)
+  if (reference !== undefined && !isCanonicalReference(reference)) {
+    res.status(400).send({ error: 'bad reference' })
+    return
+  }
+
   if (options.removePinHeader) {
     delete headers[SWARM_PIN_HEADER]
   }
@@ -208,7 +231,7 @@ async function fetchAndRespond(
     let typeLabel: string | null = null
 
     const matchingTypeHint = typeHints.find(typeHint => {
-      const actualHash = Binary.keccak256(head.subarray(typeHint.byteStart, typeHint.byteLength))
+      const actualHash = Binary.keccak256(head.subarray(typeHint.byteStart, typeHint.byteStart + typeHint.byteLength))
       const expectedHash = Binary.hexToUint8Array(typeHint.hash)
       return Binary.equals(actualHash, expectedHash)
     })
@@ -234,7 +257,6 @@ async function fetchAndRespond(
       return row || DEFAULT_SETTINGS
     })
 
-    const reference = getReferenceSegment(path)
     const isEns = reference !== undefined && ENS_NAME.test(reference)
 
     let allowed = typeLabel

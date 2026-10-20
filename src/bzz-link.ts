@@ -5,9 +5,8 @@ import { Rewrites, RewritesRow } from './database/Rewrites'
 export class NotEnabledError extends Error {}
 
 export async function subdomainToBzz(subdomain: string): Promise<string> {
-  const rewrite = await Cache.get<RewritesRow | null>('rewrites', Dates.minutes(1), async () =>
-    Rewrites.getOneOrNull({ subdomain }),
-  )
+  const rewrites = await Cache.get<RewritesRow[]>('rewrites', Dates.minutes(1), () => Rewrites.getMany())
+  const rewrite = rewrites.find(x => x.subdomain === subdomain)
   if (rewrite) {
     return rewrite.target
   }
