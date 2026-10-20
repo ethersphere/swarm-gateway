@@ -1,7 +1,5 @@
 import { Bee } from '@ethersphere/bee-js'
-import bodyParser from 'body-parser'
-import bytes from 'bytes'
-import { Arrays, Objects, Strings, Types } from 'cafe-utility'
+import { Arrays, Numbers, Objects, Strings, Types } from 'cafe-utility'
 import express, { Application, NextFunction, Request, Response } from 'express'
 import { Readable } from 'stream'
 import { pipeline } from 'stream/promises'
@@ -12,7 +10,7 @@ import { runQuery } from './database/Database'
 import { Reports } from './database/Reports'
 import { Rules } from './database/Rules'
 import { logger } from './logger'
-import { register } from './metrics'
+import { METRICS_CONTENT_TYPE, renderMetrics } from './metrics'
 import { createProxyEndpoints, hasDotSegment } from './proxy'
 import { checkReadiness } from './readiness'
 import { resolveFeed } from './services/feed'
@@ -36,13 +34,10 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
   const bee = new Bee(config.beeApiUrl)
   const app = express()
 
-  const postSizeLimit = bytes.parse(
+  const postSizeLimit = Numbers.makeStorage(
     Arrays.getArgument(process.argv, 'post-size-limit', process.env, 'POST_SIZE_LIMIT') || '1gb',
   )
-  if (postSizeLimit === null) {
-    throw Error('invalid POST_SIZE_LIMIT')
-  }
-  const parseBody = bodyParser.raw({ type: () => true })
+  const parseBody = express.raw({ type: () => true })
 
   app.use((req, res, next) => {
     res.set('Access-Control-Allow-Origin', '*')
@@ -91,14 +86,10 @@ export function createApp(config: AppConfig, stampManager: StampManager): Applic
 
   logger.info(`resolving .eth names and CIDs at *.${config.hostname}`)
 
-  app.get(
-    '/metrics',
-    handleErrors(async (_req, res) => {
-      res.set('Content-Type', register.contentType)
-      res.write(await register.metrics())
-      res.end()
-    }),
-  )
+  app.get('/metrics', (_req, res) => {
+    res.set('Content-Type', METRICS_CONTENT_TYPE)
+    res.end(renderMetrics())
+  })
 
   app.get('/gateway', (_req, res) => res.send({ gateway: true }))
 
