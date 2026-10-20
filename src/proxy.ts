@@ -1,9 +1,10 @@
 import { Reference } from '@ethersphere/bee-js'
 import { Binary, Cache, Dates, Objects, Strings } from 'cafe-utility'
-import { Application, Response } from 'express'
+import { Application, Request, Response } from 'express'
 import { IncomingHttpHeaders } from 'http'
-import { Readable } from 'stream'
+import { pipeline as pipeStreams, Readable, Transform } from 'stream'
 import { pipeline } from 'stream/promises'
+import { createGunzip, createInflate } from 'zlib'
 import { subdomainToBzz } from './bzz-link'
 import { AllowedUserAgents } from './database/AllowedUserAgents'
 import { getOnlyRowOrNull } from './database/Database'
@@ -36,10 +37,13 @@ const REFERENCE_SEGMENT = /^\/*(?:bzz|bytes|chunks)\/+([^/]+)/i
 const HEX_REFERENCE = /^(?:[0-9a-fA-F]{64}){1,2}$/
 const CID_REFERENCE = /^bah[a-z2-7]+$/
 const ENS_NAME = /\.eth$/i
+const SUBDOMAIN = /^[0-9a-z.-]+$/i
 const NOT_FOUND_MESSAGE = 'address not found or incorrect'
 const NOT_FOUND_PEEK_LENGTH = 100
 const HTML_PEEK_LENGTH = 50
 const EMPTY_HEAD = Buffer.alloc(0)
+const PAYLOAD_TOO_LARGE = Error('payload too large')
+const DECODERS: Record<string, () => Transform> = { gzip: createGunzip, 'x-gzip': createGunzip, deflate: createInflate }
 const UNFORWARDED_REQUEST_HEADERS = new Set([
   'host',
   'connection',
@@ -67,6 +71,7 @@ interface Options {
   instanceName?: string | undefined
   stampManager: StampManager
   hostname?: string
+  postSizeLimit: number
 }
 
 export function hasDotSegment(path: string): boolean {
@@ -122,6 +127,11 @@ export function createProxyEndpoints(app: Application, options: Options) {
       return
     }
 
+    if (!SUBDOMAIN.test(subdomain)) {
+      res.status(400).send({ error: 'bad host' })
+      return
+    }
+
     try {
       const newUrl = await subdomainToBzz(
         subdomain.slice(0, -1), // remove trailing dot
@@ -131,7 +141,7 @@ export function createProxyEndpoints(app: Application, options: Options) {
         Strings.joinUrl(['bzz', newUrl, req.path]),
         req.query,
         req.headers,
-        req.body,
+        null,
         res,
         options,
       )
@@ -147,20 +157,51 @@ export function createProxyEndpoints(app: Application, options: Options) {
 
       return
     }
-    await fetchAndRespond('GET', req.path, req.query, req.headers, req.body, res, options)
+    await fetchAndRespond('GET', req.path, req.query, req.headers, null, res, options)
   })
 
   app.post(POST_PROXY_ENDPOINTS, async (req, res) => {
-    await fetchAndRespond('POST', req.path, req.query, req.headers, req.body, res, options)
+    if (Number(req.headers['content-length']) > options.postSizeLimit) {
+      res.status(413).send({ error: 'payload too large' })
+      return
+    }
+    const body = getUploadBody(req, options.postSizeLimit)
+    if (!body) {
+      res.status(415).send({ error: 'unsupported content encoding' })
+      return
+    }
+    await fetchAndRespond('POST', req.path, req.query, req.headers, body, res, options)
   })
 }
+
+function getUploadBody(req: Request, limit: number): AsyncIterable<Buffer> | null {
+  const encoding = req.headers['content-encoding']?.toLowerCase() ?? 'identity'
+  if (encoding === 'identity') {
+    return limitSize(req, limit)
+  }
+  const createDecoder = DECODERS[encoding]
+  return createDecoder ? limitSize(pipeStreams(req, createDecoder(), ignoreError), limit) : null
+}
+
+async function* limitSize(source: AsyncIterable<Buffer>, limit: number): AsyncIterable<Buffer> {
+  let size = 0
+  for await (const chunk of source) {
+    size += chunk.byteLength
+    if (size > limit) {
+      throw PAYLOAD_TOO_LARGE
+    }
+    yield chunk
+  }
+}
+
+function ignoreError() {}
 
 async function fetchAndRespond(
   method: 'GET' | 'POST',
   path: string,
   query: Record<string, unknown>,
   headers: IncomingHttpHeaders,
-  body: unknown,
+  body: AsyncIterable<Buffer> | null,
   res: Response,
   options: Options,
 ) {
@@ -183,12 +224,13 @@ async function fetchAndRespond(
     const init: RequestInit = {
       method,
       headers: toBeeHeaders(headers),
-      body: method === 'POST' && Buffer.isBuffer(body) ? body : null,
+      body,
+      duplex: 'half',
       redirect: 'manual',
     }
     response = await fetchBee(Strings.joinUrl([options.beeApiUrl, path]) + queryString, init)
 
-    if (response.status === 404 || (response.status >= 300 && response.status < 400)) {
+    if (method === 'GET' && (response.status === 404 || (response.status >= 300 && response.status < 400))) {
       const uglyUrls = [Strings.joinUrl([options.beeApiUrl, path, 'index.html']) + queryString]
       if (!path.endsWith('/')) {
         uglyUrls.push(Strings.joinUrl([options.beeApiUrl, path]) + '.html' + queryString)
@@ -354,6 +396,8 @@ async function fetchAndRespond(
     if (res.headersSent) {
       logger.debug('proxy stream interrupted', error)
       res.destroy()
+    } else if (error instanceof Error && error.cause === PAYLOAD_TOO_LARGE) {
+      res.status(413).send({ error: 'payload too large' })
     } else {
       logger.error('proxy failed', error)
       res.sendStatus(500)
