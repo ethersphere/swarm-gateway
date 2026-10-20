@@ -20,5 +20,6 @@
         "allowUnusedLabels": false,
         "noUncheckedIndexedAccess": true,
         "exactOptionalPropertyTypes": true
-    }
+    },
+    "include": ["src"]
 }
