@@ -309,6 +309,9 @@ describe('non-canonical references', () => {
     `/BZZ/${upperCid}/`,
     `/bytes/f${cidBytes.toString('hex')}`,
     `/bzz/${percentEncoded}/`,
+    `/bzz/${DENIED_HASH}%2fsite.eth/`,
+    `/bzz/${DENIED_HASH}%2Fsite.eth/index.html`,
+    `/bzz/${DENIED_HASH}%5csite.eth/`,
   ]
 
   for (const path of bypasses) {
