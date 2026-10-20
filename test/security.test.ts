@@ -5,15 +5,25 @@ import { Reference } from '@ethersphere/bee-js'
 import assert from 'node:assert/strict'
 import http, { Server } from 'node:http'
 import { AddressInfo } from 'node:net'
-import { after, before, describe, it } from 'node:test'
+import { after, before, describe, it, mock } from 'node:test'
 import { AppConfig } from '../src/config'
-import { getReferenceSegment, getRuleHash, getRuleHashes } from '../src/proxy'
+import * as Database from '../src/database/Database'
+import { addRuleHashes, getReferenceSegment, getRuleHash } from '../src/proxy'
 import { createApp } from '../src/server'
+import * as Feed from '../src/services/feed'
 import { StampManager } from '../src/stamp'
 
 const HASH = 'cd'.repeat(32)
 const OTHER_HASH = 'ef'.repeat(32)
 const HOMEPAGE = 'ab'.repeat(32)
+const DENIED_HASH = '12'.repeat(32)
+const FEED_MANIFEST = '34'.repeat(32)
+
+const ENS_RECORDS: Record<string, string> = {
+  '/bytes/denied.eth': DENIED_HASH,
+  '/bytes/feed.eth': FEED_MANIFEST,
+  '/bytes/other.eth': OTHER_HASH,
+}
 
 const beeRequests: string[] = []
 const servers: Server[] = []
@@ -22,7 +32,11 @@ const bee = http.createServer((req, res) => {
   beeRequests.push(`${req.method} ${req.url}`)
   req.resume()
   const url = req.url ?? ''
-  if (url.endsWith('/charset-html')) {
+  if (req.method === 'HEAD') {
+    const reference = ENS_RECORDS[url.toLowerCase()]
+    res.writeHead(reference ? 200 : 404, reference ? { etag: `"${reference}"` } : {})
+    res.end()
+  } else if (url.endsWith('/charset-html')) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     res.end('<html><script>alert(1)</script></html>')
   } else if (url.includes('site')) {
@@ -203,11 +217,55 @@ describe('rule hash', () => {
   it('matches every encoding of a reference', () => {
     const forms = [HASH, new Reference(HASH).toCid('manifest'), new Reference(HASH).toCid('feed')]
     for (const form of forms) {
-      assert.deepEqual(getRuleHashes(form), forms)
+      assert.deepEqual(addRuleHashes([], form), forms)
     }
   })
 
   it('keeps unparseable hashes as they are', () => {
-    assert.deepEqual(getRuleHashes('bahnotacid'), ['bahnotacid'])
+    assert.deepEqual(addRuleHashes([], 'bahnotacid'), ['bahnotacid'])
+  })
+})
+
+describe('ens moderation', () => {
+  let port: number
+
+  before(async () => {
+    mock.method(Database, 'getOnlyRowOrNull', async (_query: string, ...params: unknown[]) =>
+      Array.isArray(params[0]) && params[0].includes(DENIED_HASH) ? { hash: DENIED_HASH, mode: 'deny' } : null,
+    )
+    mock.method(Feed, 'resolveFeed', async (_beeApiUrl: string, hash: string) =>
+      hash === FEED_MANIFEST ? { index: '1', reference: DENIED_HASH, owner: null, topic: null } : null,
+    )
+    port = await startGateway()
+  })
+
+  after(() => {
+    mock.restoreAll()
+  })
+
+  it('denies a denied hash behind an ens name', async () => {
+    const response = await request(port, 'GET', '/bzz/denied.eth/')
+    assert.equal(response.status, 302)
+    assert.equal(response.location, `/forbidden?hash=${DENIED_HASH}`)
+  })
+
+  it('denies a denied hash behind an ens subdomain', async () => {
+    assert.equal((await request(port, 'GET', '/', { host: 'denied.gw.local' })).status, 302)
+  })
+
+  it('matches ens names case-insensitively', async () => {
+    assert.equal((await request(port, 'GET', '/bzz/DENIED.ETH/')).status, 302)
+  })
+
+  it('denies a denied hash served by the feed behind an ens name', async () => {
+    assert.equal((await request(port, 'GET', '/bzz/feed.eth/')).status, 302)
+  })
+
+  it('allows ens names pointing to other content', async () => {
+    assert.equal((await request(port, 'GET', '/bzz/other.eth/')).status, 200)
+  })
+
+  it('falls back to the ens rule when the name does not resolve', async () => {
+    assert.equal((await request(port, 'GET', '/bzz/unknown.eth/')).status, 200)
   })
 })

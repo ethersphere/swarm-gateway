@@ -11,6 +11,7 @@ import { Settings, SettingsRow, SettingsRowId } from './database/Settings'
 import { TypeHints, TypeHintsRow } from './database/TypeHints'
 import { logger } from './logger'
 import { getNotFoundPage } from './not-found'
+import { resolveEnsReferences } from './services/ens'
 import { StampManager } from './stamp'
 
 export const GET_PROXY_ENDPOINTS = ['/chunks/*', '/bytes/*', '/bzz/*', '/feeds/*']
@@ -31,6 +32,7 @@ const SWARM_PRESIGNED_HEADER = 'swarm-postage-stamp'
 const SWARM_PIN_HEADER = 'swarm-pin'
 const DOT_SEGMENT = /(^|[/\\])\.\.?([/\\]|$)/
 const REFERENCE_SEGMENT = /^\/?(?:bzz|bytes|chunks)\/([^/]+)/
+const ENS_NAME = /\.eth$/i
 
 interface Options {
   beeApiUrl: string
@@ -59,13 +61,14 @@ export function getRuleHash(subject: string): string | null {
   return Strings.searchSubstring(subject, x => x.length > 48 && x.startsWith('bah')) || Strings.searchHex(subject, 64)
 }
 
-export function getRuleHashes(hash: string): string[] {
+export function addRuleHashes(hashes: string[], hash: string): string[] {
   try {
     const reference = new Reference(hash)
-    return [reference.toHex(), reference.toCid('manifest'), reference.toCid('feed')]
+    hashes.push(reference.toHex(), reference.toCid('manifest'), reference.toCid('feed'))
   } catch {
-    return [hash]
+    hashes.push(hash)
   }
+  return hashes
 }
 
 export function createProxyEndpoints(app: Application, options: Options) {
@@ -226,7 +229,7 @@ async function fetchAndRespond(
     })
 
     const reference = getReferenceSegment(path)
-    const isEns = reference?.endsWith('.eth') ?? false
+    const isEns = reference !== undefined && ENS_NAME.test(reference)
 
     let allowed = typeLabel
       ? true
@@ -253,11 +256,20 @@ async function fetchAndRespond(
     }
 
     const hash = getRuleHash(reference ?? path)
-    const rule = hash
+    const hashes: string[] = []
+    if (hash) {
+      addRuleHashes(hashes, hash)
+    }
+    if (isEns) {
+      for (const ensHash of await resolveEnsReferences(options.beeApiUrl, reference)) {
+        addRuleHashes(hashes, ensHash)
+      }
+    }
+    const rule = hashes.length
       ? ((await getOnlyRowOrNull(
-          `SELECT mode FROM rules WHERE hash IN (?) ORDER BY mode = 'deny' DESC LIMIT 1`,
-          getRuleHashes(hash),
-        ).catch(() => null)) as Pick<RulesRow, 'mode'> | null)
+          `SELECT hash, mode FROM rules WHERE hash IN (?) ORDER BY mode = 'deny' DESC LIMIT 1`,
+          hashes,
+        ).catch(() => null)) as Pick<RulesRow, 'hash' | 'mode'> | null)
       : null
 
     if (rule) {
@@ -269,8 +281,9 @@ async function fetchAndRespond(
     }
 
     if (!allowed) {
-      if (hash) {
-        res.redirect(`${settings.redirectUri}/forbidden?hash=${hash}`)
+      const forbiddenHash = rule?.hash ?? hash
+      if (forbiddenHash) {
+        res.redirect(`${settings.redirectUri}/forbidden?hash=${forbiddenHash}`)
       } else {
         res.redirect(`${settings.redirectUri}/forbidden`)
       }
