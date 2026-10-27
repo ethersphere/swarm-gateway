@@ -344,6 +344,7 @@ describe('subdomain rewrites', () => {
 
   before(async () => {
     Cache.delete('rewrites')
+    mock.method(Database, 'isDatabaseConfigured', () => true)
     mock.method(Database, 'getRows', async (query: string) =>
       query.includes('FROM rewrites') ? [{ subdomain: 'rewritten', target: OTHER_HASH }] : [],
     )
