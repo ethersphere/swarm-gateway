@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Dates, Types } from 'cafe-utility'
+import { Cache, Dates, Types } from 'cafe-utility'
 import {
   EnvironmentVariables,
   getAppConfig,
@@ -38,6 +38,8 @@ async function main() {
   if (process.env.DATABASE_CONFIG && process.env.DATABASE_CONFIG !== '{}') {
     startFeedMonitor(appConfig.beeApiUrl)
   }
+
+  setInterval(Cache.deleteExpired, Dates.minutes(10))
 
   const app = createApp(appConfig, stampManager, postageBatchDispenser)
 

@@ -3,9 +3,14 @@ import { Cache, Dates, Strings } from 'cafe-utility'
 import { isDatabaseConfigured } from './database/Database'
 import { Rewrites, RewritesRow } from './database/Rewrites'
 
+export const SUBDOMAIN = /^[0-9a-z.-]+$/i
+
 export class NotEnabledError extends Error {}
 
 export async function isServableSubdomain(subdomain: string, beeApiUrl: string): Promise<boolean> {
+  if (!SUBDOMAIN.test(subdomain)) {
+    return false
+  }
   try {
     return await Cache.get(`tls-check:${subdomain}`, Dates.minutes(10), async () => {
       if (await Rewrites.getOneOrNull({ subdomain }).catch(() => null)) {

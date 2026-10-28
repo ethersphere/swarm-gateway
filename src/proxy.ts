@@ -5,7 +5,7 @@ import { IncomingHttpHeaders } from 'http'
 import { pipeline as pipeStreams, Readable, Transform } from 'stream'
 import { pipeline } from 'stream/promises'
 import { createGunzip, createInflate } from 'zlib'
-import { subdomainToBzz } from './bzz-link'
+import { SUBDOMAIN, subdomainToBzz } from './bzz-link'
 import { AllowedUserAgents } from './database/AllowedUserAgents'
 import { getOnlyRowOrNull } from './database/Database'
 import { RulesRow } from './database/Rules'
@@ -39,7 +39,6 @@ const HEX_REFERENCE = /^(?:[0-9a-fA-F]{64}){1,2}$/
 const CID_REFERENCE = /^bah[a-z2-7]+$/
 const ENS_NAME = /\.eth$/i
 const ENCODED_SEPARATOR = /%(?:2f|5c)/i
-const SUBDOMAIN = /^[0-9a-z.-]+$/i
 const NOT_FOUND_MESSAGE = 'address not found or incorrect'
 const NOT_FOUND_PEEK_LENGTH = 100
 const HTML_PEEK_LENGTH = 50
@@ -231,11 +230,10 @@ async function fetchAndRespond(
 
   let response: globalThis.Response | null = null
   try {
+    if (method === 'POST' && options.postageBatchDispenser.enabled) {
+      delete headers[SWARM_STAMP_HEADER]
+    }
     if (method === 'POST' && !headers[SWARM_PRESIGNED_HEADER]) {
-      if (options.postageBatchDispenser.enabled) {
-        delete headers[SWARM_STAMP_HEADER]
-      }
-
       if (options.postageBatchDispenser.enabled && Types.isString(postageToken)) {
         const batchId = await options.postageBatchDispenser.resolveToken(postageToken)
 

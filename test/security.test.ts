@@ -29,10 +29,12 @@ const ENS_RECORDS: Record<string, string> = {
 }
 
 const beeRequests: string[] = []
+const beeStamps: (string | string[] | undefined)[] = []
 const servers: Server[] = []
 
 const bee = http.createServer((req, res) => {
   beeRequests.push(`${req.method} ${req.url}`)
+  beeStamps.push(req.headers['swarm-postage-batch-id'])
   req.resume()
   const url = req.url ?? ''
   const reference = ENS_RECORDS[url.toLowerCase()]
@@ -59,7 +61,10 @@ async function listen(server: Server): Promise<number> {
   return (server.address() as AddressInfo).port
 }
 
-async function startGateway(config: Partial<AppConfig> = {}): Promise<number> {
+async function startGateway(
+  config: Partial<AppConfig> = {},
+  dispenser = new PostageBatchDispenserService({ url: '', secret: '' }),
+): Promise<number> {
   const beeApiUrl = `http://127.0.0.1:${(bee.address() as AddressInfo).port}`
   const stampManager = new StampManager(beeApiUrl, {
     hardcodedStamp: 'aa'.repeat(32),
@@ -71,7 +76,7 @@ async function startGateway(config: Partial<AppConfig> = {}): Promise<number> {
   const app = createApp(
     { beeApiUrl, hostname: 'gw.local', removePinHeader: true, ...config },
     stampManager,
-    new PostageBatchDispenserService({ url: '', secret: '' }),
+    dispenser,
   )
   return listen(http.createServer(app))
 }
@@ -146,6 +151,14 @@ describe('path traversal into the Bee API', () => {
     })
   }
 
+  for (const domain of ['..%2Fstamps%3F.gw.local', '..%2Fwallet%23.gw.local', `..%2Fchunks%2F${HASH}%23.gw.local`]) {
+    it(`rejects traversal through the tls check domain ${domain}`, async () => {
+      beeRequests.length = 0
+      assert.equal((await request(port, 'GET', `/tls-check?domain=${domain}`)).status, 403)
+      assert.deepEqual(beeRequests, [])
+    })
+  }
+
   it('keeps the homepage query string out of the joined path', async () => {
     beeRequests.length = 0
     await request(homepagePort, 'GET', '/?a=/../../../wallet')
@@ -184,6 +197,50 @@ describe('soft auth', () => {
 
   it('allows unauthorized downloads', async () => {
     assert.equal((await request(port, 'GET', `/bytes/${HASH}`)).status, 200)
+  })
+})
+
+describe('postage batch dispenser', () => {
+  const TOKEN_BATCH = 'dd'.repeat(32)
+  const CLIENT_BATCH = 'ff'.repeat(32)
+  let port: number
+
+  before(async () => {
+    const dispenserPort = await listen(
+      http.createServer((req, res) => {
+        if (req.headers['x-swarm-postage-token'] === 'good') {
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ batchId: TOKEN_BATCH }))
+        } else {
+          res.writeHead(404)
+          res.end()
+        }
+      }),
+    )
+    port = await startGateway(
+      {},
+      new PostageBatchDispenserService({ url: `http://127.0.0.1:${dispenserPort}`, secret: 'secret' }),
+    )
+  })
+
+  it('stamps with the batch of the token', async () => {
+    beeStamps.length = 0
+    const headers = { 'x-swarm-postage-token': 'good', 'swarm-postage-batch-id': CLIENT_BATCH }
+    assert.equal((await request(port, 'POST', '/bytes', headers)).status, 200)
+    assert.deepEqual(beeStamps, [TOKEN_BATCH])
+  })
+
+  it('rejects an unknown token', async () => {
+    beeRequests.length = 0
+    assert.equal((await request(port, 'POST', '/bytes', { 'x-swarm-postage-token': 'bad' })).status, 401)
+    assert.deepEqual(beeRequests, [])
+  })
+
+  it('drops the client batch id next to a presigned stamp', async () => {
+    beeStamps.length = 0
+    const headers = { 'swarm-postage-stamp': 'x', 'swarm-postage-batch-id': CLIENT_BATCH }
+    assert.equal((await request(port, 'POST', '/bytes', headers)).status, 200)
+    assert.deepEqual(beeStamps, [undefined])
   })
 })
 
