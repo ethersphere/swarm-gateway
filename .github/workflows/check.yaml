@@ -36,6 +36,9 @@ jobs:
       - name: Check build
         run: npm run build
 
+      - name: Unit tests
+        run: npm test
+
       - name: Code formatting check
         run: npm run format:check
         env:

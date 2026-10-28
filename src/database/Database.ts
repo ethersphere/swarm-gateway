@@ -133,3 +133,7 @@ export function buildSelect<T>(filter?: Partial<T>, options?: SelectOptions<T>):
 export async function closeDatabase() {
   await pool?.end()
 }
+
+export function isDatabaseConfigured(): boolean {
+  return pool !== null
+}

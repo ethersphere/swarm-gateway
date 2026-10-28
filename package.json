@@ -5,28 +5,22 @@
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",
-    "depcheck": "depcheck",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\""
+    "depcheck": "npx --yes depcheck",
+    "format": "prettier --write \"{src,test}/**/*.ts\"",
+    "format:check": "prettier --check \"{src,test}/**/*.ts\"",
+    "test": "tsc -p tsconfig.test.json && node --test build-test/test/*.test.js"
   },
   "license": "BSD-3-Clause",
   "dependencies": {
-    "@ethersphere/bee-js": "^13.0.0",
-    "axios": "^1.15.1",
-    "body-parser": "^1.20.4",
-    "cafe-utility": "^33.9.0",
-    "express": "^4.22.0",
-    "mysql2": "^3.14.0",
-    "prom-client": "^14.1.0",
-    "request-stats": "^3.0.0",
-    "winston": "^3.8.2"
+    "@ethersphere/bee-js": "^13.2.0",
+    "cafe-utility": "^34.0.0",
+    "express": "^5.3.0",
+    "mysql2": "^3.24.6"
   },
   "devDependencies": {
-    "@types/express": "^4.17.14",
-    "@types/node": "^24.9.2",
-    "@types/request-stats": "^3.0.0",
-    "depcheck": "^1.4.7",
-    "prettier": "^3.9.4",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.19.2",
+    "prettier": "^3.9.10",
     "typescript": "^5.9.3"
   }
 }

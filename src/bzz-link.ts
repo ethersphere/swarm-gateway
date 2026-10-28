@@ -1,5 +1,6 @@
 import { Reference } from '@ethersphere/bee-js'
 import { Cache, Dates, Strings } from 'cafe-utility'
+import { isDatabaseConfigured } from './database/Database'
 import { Rewrites, RewritesRow } from './database/Rewrites'
 
 export class NotEnabledError extends Error {}
@@ -34,9 +35,10 @@ async function resolvesOnBee(ensName: string, beeApiUrl: string): Promise<boolea
 }
 
 export async function subdomainToBzz(subdomain: string): Promise<string> {
-  const rewrite = await Cache.get<RewritesRow | null>('rewrites', Dates.minutes(1), async () =>
-    Rewrites.getOneOrNull({ subdomain }),
-  )
+  const rewrites = isDatabaseConfigured()
+    ? await Cache.get<RewritesRow[]>('rewrites', Dates.minutes(1), () => Rewrites.getMany())
+    : []
+  const rewrite = rewrites.find(x => x.subdomain === subdomain)
   if (rewrite) {
     return rewrite.target
   }

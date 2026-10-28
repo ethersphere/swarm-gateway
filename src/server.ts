@@ -1,8 +1,8 @@
 import { Bee } from '@ethersphere/bee-js'
-import axios from 'axios'
-import bodyParser from 'body-parser'
-import { Arrays, Strings, Types } from 'cafe-utility'
+import { Arrays, Numbers, Objects, Strings, Types } from 'cafe-utility'
 import express, { Application, NextFunction, Request, Response } from 'express'
+import { Readable } from 'stream'
+import { pipeline } from 'stream/promises'
 import { isServableSubdomain } from './bzz-link'
 import { checkChallenge, createChallenge } from './challenge'
 import { AppConfig, ReadinessMode } from './config'
@@ -11,13 +11,26 @@ import { runQuery } from './database/Database'
 import { Reports } from './database/Reports'
 import { Rules } from './database/Rules'
 import { logger } from './logger'
-import { register } from './metrics'
-import { createProxyEndpoints } from './proxy'
+import { METRICS_CONTENT_TYPE, renderMetrics } from './metrics'
+import { createProxyEndpoints, hasDotSegment } from './proxy'
 import { checkReadiness } from './readiness'
 import { resolveFeed } from './services/feed'
 import { sendMattermostAlert } from './services/mattermost'
 import { PostageBatchDispenserService } from './services/postage-batch-dispenser'
 import { StampManager } from './stamp'
+
+function handleErrors(handler: (req: Request, res: Response) => Promise<void>) {
+  return (req: Request, res: Response) => {
+    handler(req, res).catch(error => {
+      logger.error('request failed', { path: req.path, error })
+      if (res.headersSent) {
+        res.destroy()
+      } else {
+        res.sendStatus(500)
+      }
+    })
+  }
+}
 
 export function createApp(
   config: AppConfig,
@@ -27,9 +40,10 @@ export function createApp(
   const bee = new Bee(config.beeApiUrl)
   const app = express()
 
-  const postSizeLimit = Arrays.getArgument(process.argv, 'post-size-limit', process.env, 'POST_SIZE_LIMIT') || '1gb'
-
-  app.use(bodyParser.raw({ inflate: true, limit: postSizeLimit, type: () => true }))
+  const postSizeLimit = Numbers.makeStorage(
+    Arrays.getArgument(process.argv, 'post-size-limit', process.env, 'POST_SIZE_LIMIT') || '1gb',
+  )
+  const parseBody = express.raw({ type: () => true })
 
   app.use((req, res, next) => {
     res.set('Access-Control-Allow-Origin', '*')
@@ -49,6 +63,15 @@ export function createApp(
     next()
   })
 
+  app.use((req, res, next) => {
+    if (hasDotSegment(req.path)) {
+      res.status(400)
+      res.send({ error: 'bad path' })
+      return
+    }
+    next()
+  })
+
   const subdomainOffset = config.hostname.split('.').length
   app.set('subdomain offset', subdomainOffset)
 
@@ -57,7 +80,7 @@ export function createApp(
       if (req.headers.authorization === config.authorization) {
         next()
       } else if (
-        req.method !== 'post' &&
+        req.method !== 'POST' &&
         Arrays.getBooleanArgument(process.argv, 'soft-auth', process.env, 'SOFT_AUTH')
       ) {
         next()
@@ -69,10 +92,9 @@ export function createApp(
 
   logger.info(`resolving .eth names and CIDs at *.${config.hostname}`)
 
-  app.get('/metrics', async (_req, res) => {
-    res.set('Content-Type', register.contentType)
-    res.write(await register.metrics())
-    res.end()
+  app.get('/metrics', (_req, res) => {
+    res.set('Content-Type', METRICS_CONTENT_TYPE)
+    res.end(renderMetrics())
   })
 
   app.get('/gateway', (_req, res) => res.send({ gateway: true }))
@@ -129,49 +151,60 @@ export function createApp(
     }
   })
 
-  app.post('/challenge', async (_req, res) => {
-    res.send(await createChallenge())
-  })
+  app.post(
+    '/challenge',
+    handleErrors(async (_req, res) => {
+      res.send(await createChallenge())
+    }),
+  )
 
-  app.post('/moderation/approval', async (req, res) => {
-    const json = JSON.parse(req.body.toString())
-    const { hash, ens, challengeId, challengeSolution } = json
-    if (!(await checkChallenge(challengeId, challengeSolution))) {
-      res.sendStatus(400)
-      return
-    }
+  app.post(
+    '/moderation/approval',
+    parseBody,
+    handleErrors(async (req, res) => {
+      const json = JSON.parse(req.body.toString())
+      const { hash, ens, challengeId, challengeSolution } = json
+      if (!(await checkChallenge(challengeId, challengeSolution))) {
+        res.sendStatus(400)
+        return
+      }
 
-    const existingRequest = await ApprovalRequests.getMany({ hash: Types.asString(hash) }, { limit: 1 })
-    if (existingRequest.length) {
+      const existingRequest = await ApprovalRequests.getMany({ hash: Types.asString(hash) }, { limit: 1 })
+      if (existingRequest.length) {
+        res.sendStatus(200)
+        return
+      }
+      const feed = await resolveFeed(config.beeApiUrl, Types.asString(hash)).catch(() => null)
+      await ApprovalRequests.insert({
+        hash: Types.asString(hash),
+        ens: Types.asNullable(Types.asString, ens),
+        feedIndex: feed?.index ?? null,
+        feedOwner: feed?.owner ?? null,
+        feedTopic: feed?.topic ?? null,
+        feedReference: feed?.reference ?? null,
+      })
+      await sendMattermostAlert(
+        `### New moderation approval request\n**Hash**: ${hash}\n**ENS**: ${ens || 'N/A'}` +
+          (feed ? `\n**Feed**: yes (index ${feed.index}) — content is mutable and will be monitored` : ''),
+      )
       res.sendStatus(200)
-      return
-    }
-    const feed = await resolveFeed(config.beeApiUrl, Types.asString(hash)).catch(() => null)
-    await ApprovalRequests.insert({
-      hash: Types.asString(hash),
-      ens: Types.asNullable(Types.asString, ens),
-      feedIndex: feed?.index ?? null,
-      feedOwner: feed?.owner ?? null,
-      feedTopic: feed?.topic ?? null,
-      feedReference: feed?.reference ?? null,
-    })
-    await sendMattermostAlert(
-      `### New moderation approval request\n**Hash**: ${hash}\n**ENS**: ${ens || 'N/A'}` +
-        (feed ? `\n**Feed**: yes (index ${feed.index}) — content is mutable and will be monitored` : ''),
-    )
-    res.sendStatus(200)
-  })
+    }),
+  )
 
-  app.post('/moderation/report', async (req, res) => {
-    const json = JSON.parse(req.body.toString())
-    const { hash, reason, challengeId, challengeSolution } = json
-    if (!(await checkChallenge(challengeId, challengeSolution))) {
-      res.sendStatus(400)
-      return
-    }
-    await Reports.insert({ hash: Types.asString(hash), reason })
-    res.sendStatus(200)
-  })
+  app.post(
+    '/moderation/report',
+    parseBody,
+    handleErrors(async (req, res) => {
+      const json = JSON.parse(req.body.toString())
+      const { hash, reason, challengeId, challengeSolution } = json
+      if (!(await checkChallenge(challengeId, challengeSolution))) {
+        res.sendStatus(400)
+        return
+      }
+      await Reports.insert({ hash: Types.asString(hash), reason })
+      res.sendStatus(200)
+    }),
+  )
 
   function moderationGuard(req: Request, res: Response, next: NextFunction) {
     if (!config.moderationSecret) {
@@ -187,39 +220,57 @@ export function createApp(
     next()
   }
 
-  app.get('/moderation', moderationGuard, async (_req, res) => {
-    const reports = await Reports.getMany()
-    const rules = await Rules.getMany()
+  app.get(
+    '/moderation',
+    moderationGuard,
+    handleErrors(async (_req, res) => {
+      const reports = await Reports.getMany()
+      const rules = await Rules.getMany()
 
-    res.send({ reports, rules })
-  })
+      res.send({ reports, rules })
+    }),
+  )
 
-  app.post('/moderation/allow', moderationGuard, async (req, res) => {
-    const json = JSON.parse(req.body.toString())
-    const { hash } = json
-    const feed = await resolveFeed(config.beeApiUrl, Types.asString(hash)).catch(() => null)
-    await Rules.insert({
-      hash: Types.asString(hash),
-      mode: 'allow',
-      feedIndex: feed?.index ?? null,
-      feedOwner: feed?.owner ?? null,
-      feedTopic: feed?.topic ?? null,
-      feedReference: feed?.reference ?? null,
-    })
-    res.sendStatus(200)
-  })
+  app.post(
+    '/moderation/allow',
+    moderationGuard,
+    parseBody,
+    handleErrors(async (req, res) => {
+      const json = JSON.parse(req.body.toString())
+      const { hash } = json
+      const feed = await resolveFeed(config.beeApiUrl, Types.asString(hash)).catch(() => null)
+      await Rules.insert({
+        hash: Types.asString(hash),
+        mode: 'allow',
+        feedIndex: feed?.index ?? null,
+        feedOwner: feed?.owner ?? null,
+        feedTopic: feed?.topic ?? null,
+        feedReference: feed?.reference ?? null,
+      })
+      res.sendStatus(200)
+    }),
+  )
 
-  app.post('/moderation/deny', moderationGuard, async (req, res) => {
-    const json = JSON.parse(req.body.toString())
-    const { hash } = json
-    await Rules.insert({ hash: Types.asString(hash), mode: 'deny' })
-    res.sendStatus(200)
-  })
+  app.post(
+    '/moderation/deny',
+    moderationGuard,
+    parseBody,
+    handleErrors(async (req, res) => {
+      const json = JSON.parse(req.body.toString())
+      const { hash } = json
+      await Rules.insert({ hash: Types.asString(hash), mode: 'deny' })
+      res.sendStatus(200)
+    }),
+  )
 
-  app.delete('/moderation/rule/:hash', moderationGuard, async (req, res) => {
-    await runQuery(`DELETE FROM rules WHERE hash = ?`, Types.asString(req.params.hash))
-    res.sendStatus(200)
-  })
+  app.delete(
+    '/moderation/rule/:hash',
+    moderationGuard,
+    handleErrors(async (req, res) => {
+      await runQuery(`DELETE FROM rules WHERE hash = ?`, Types.asString(req.params.hash))
+      res.sendStatus(200)
+    }),
+  )
 
   createProxyEndpoints(app, {
     beeApiUrl: config.beeApiUrl,
@@ -228,30 +279,37 @@ export function createApp(
     postageBatchDispenser,
     hostname: config.hostname,
     instanceName: config.instanceName,
+    postSizeLimit,
   })
 
   if (config.homepage) {
     app.use(async (req, res, next) => {
       try {
-        const url = Strings.joinUrl([config.beeApiUrl, 'bzz', config.homepage, req.url])
+        const url =
+          Strings.joinUrl([config.beeApiUrl, 'bzz', config.homepage, req.path]) + Objects.toQueryString(req.query, true)
         logger.debug('attempting to fetch homepage', { url })
 
-        const response = await axios.get(url, {
-          responseType: 'arraybuffer',
-        })
+        const response = await fetch(url)
 
+        if (!response.ok || !response.body) {
+          await response.body?.cancel()
+          next()
+          return
+        }
         if (response.status !== 200) {
+          await response.body.cancel()
           logger.error('failed to fetch homepage', { status: response.status })
           res.sendStatus(500)
           return
         }
-        const contentType = response.headers['content-type']
-        res.set('content-type', contentType ? contentType.toString() : 'application/octet-stream')
-        res.send(await response.data)
-
-        return
-      } catch (error) {
-        next()
+        res.set('content-type', response.headers.get('content-type') ?? 'application/octet-stream')
+        await pipeline(Readable.fromWeb(response.body), res)
+      } catch {
+        if (res.headersSent) {
+          res.destroy()
+        } else {
+          next()
+        }
       }
     })
   }

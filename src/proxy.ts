@@ -1,19 +1,24 @@
-import axios from 'axios'
+import { Reference } from '@ethersphere/bee-js'
 import { Binary, Cache, Dates, Objects, Strings, Types } from 'cafe-utility'
-import { Application, Response } from 'express'
+import { Application, Request, Response } from 'express'
 import { IncomingHttpHeaders } from 'http'
+import { pipeline as pipeStreams, Readable, Transform } from 'stream'
+import { pipeline } from 'stream/promises'
+import { createGunzip, createInflate } from 'zlib'
 import { subdomainToBzz } from './bzz-link'
 import { AllowedUserAgents } from './database/AllowedUserAgents'
-import { Rules } from './database/Rules'
+import { getOnlyRowOrNull } from './database/Database'
+import { RulesRow } from './database/Rules'
 import { Settings, SettingsRow, SettingsRowId } from './database/Settings'
 import { TypeHints, TypeHintsRow } from './database/TypeHints'
 import { logger } from './logger'
 import { getNotFoundPage } from './not-found'
+import { resolveEnsReferences } from './services/ens'
 import { POSTAGE_TOKEN_HEADER, PostageBatchDispenserService } from './services/postage-batch-dispenser'
 import { StampManager } from './stamp'
 
-export const GET_PROXY_ENDPOINTS = ['/chunks/*', '/bytes/*', '/bzz/*', '/feeds/*']
-export const POST_PROXY_ENDPOINTS = ['/chunks', '/bytes', '/bzz', '/soc/*', '/feeds/*']
+export const GET_PROXY_ENDPOINTS = ['/chunks/*path', '/bytes/*path', '/bzz/*path', '/feeds/*path']
+export const POST_PROXY_ENDPOINTS = ['/chunks', '/bytes', '/bzz', '/soc/*path', '/feeds/*path']
 
 const DEFAULT_SETTINGS: SettingsRow = {
   id: -1 as SettingsRowId,
@@ -28,6 +33,44 @@ const BAD_PATH = `bzz/${'00'.repeat(32)}`
 const SWARM_STAMP_HEADER = 'swarm-postage-batch-id'
 const SWARM_PRESIGNED_HEADER = 'swarm-postage-stamp'
 const SWARM_PIN_HEADER = 'swarm-pin'
+const DOT_SEGMENT = /(^|[/\\])\.\.?([/\\]|$)/
+const REFERENCE_SEGMENT = /^\/*(?:bzz|bytes|chunks)\/+([^/]+)/i
+const HEX_REFERENCE = /^(?:[0-9a-fA-F]{64}){1,2}$/
+const CID_REFERENCE = /^bah[a-z2-7]+$/
+const ENS_NAME = /\.eth$/i
+const ENCODED_SEPARATOR = /%(?:2f|5c)/i
+const SUBDOMAIN = /^[0-9a-z.-]+$/i
+const NOT_FOUND_MESSAGE = 'address not found or incorrect'
+const NOT_FOUND_PEEK_LENGTH = 100
+const HTML_PEEK_LENGTH = 50
+const EMPTY_HEAD = Buffer.alloc(0)
+const PAYLOAD_TOO_LARGE = Error('payload too large')
+const DECODERS: Record<string, () => Transform> = { gzip: createGunzip, 'x-gzip': createGunzip, deflate: createInflate }
+const UNFORWARDED_REQUEST_HEADERS = new Set([
+  'host',
+  'connection',
+  'keep-alive',
+  'transfer-encoding',
+  'upgrade',
+  'expect',
+  'content-length',
+  'content-encoding',
+])
+const UNFORWARDED_RESPONSE_HEADERS = new Set([
+  'content-length',
+  'content-encoding',
+  'transfer-encoding',
+  'connection',
+  'keep-alive',
+  'etag',
+  'last-modified',
+  'cache-control',
+])
+const CORS_LIST_HEADERS = new Set([
+  'access-control-allow-headers',
+  'access-control-allow-methods',
+  'access-control-expose-headers',
+])
 
 interface Options {
   beeApiUrl: string
@@ -36,6 +79,54 @@ interface Options {
   stampManager: StampManager
   postageBatchDispenser: PostageBatchDispenserService
   hostname?: string
+  postSizeLimit: number
+}
+
+export function hasDotSegment(path: string): boolean {
+  if (!path.includes('%')) {
+    return DOT_SEGMENT.test(path)
+  }
+  try {
+    return DOT_SEGMENT.test(decodeURIComponent(path))
+  } catch {
+    return true
+  }
+}
+
+export function getReferenceSegment(path: string): string | undefined {
+  return REFERENCE_SEGMENT.exec(path)?.[1]
+}
+
+export function isCanonicalReference(segment: string): boolean {
+  if (HEX_REFERENCE.test(segment)) {
+    return true
+  }
+  if (ENS_NAME.test(segment)) {
+    return !ENCODED_SEPARATOR.test(segment)
+  }
+  if (!CID_REFERENCE.test(segment)) {
+    return false
+  }
+  try {
+    new Reference(segment)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function getRuleHash(subject: string): string | null {
+  return Strings.searchSubstring(subject, x => x.length > 48 && x.startsWith('bah')) || Strings.searchHex(subject, 64)
+}
+
+export function addRuleHashes(hashes: string[], hash: string): string[] {
+  try {
+    const reference = new Reference(hash)
+    hashes.push(reference.toHex(), reference.toCid('manifest'), reference.toCid('feed'))
+  } catch {
+    hashes.push(hash)
+  }
+  return hashes
 }
 
 export function createProxyEndpoints(app: Application, options: Options) {
@@ -44,6 +135,11 @@ export function createProxyEndpoints(app: Application, options: Options) {
 
     if (!options.hostname || !subdomain || req.method !== 'GET') {
       next()
+      return
+    }
+
+    if (!SUBDOMAIN.test(subdomain)) {
+      res.status(400).send({ error: 'bad host' })
       return
     }
 
@@ -56,7 +152,7 @@ export function createProxyEndpoints(app: Application, options: Options) {
         Strings.joinUrl(['bzz', newUrl, req.path]),
         req.query,
         req.headers,
-        req.body,
+        null,
         res,
         options,
       )
@@ -72,23 +168,60 @@ export function createProxyEndpoints(app: Application, options: Options) {
 
       return
     }
-    await fetchAndRespond('GET', req.path, req.query, req.headers, req.body, res, options)
+    await fetchAndRespond('GET', req.path, req.query, req.headers, null, res, options)
   })
 
   app.post(POST_PROXY_ENDPOINTS, async (req, res) => {
-    await fetchAndRespond('POST', req.path, req.query, req.headers, req.body, res, options)
+    if (Number(req.headers['content-length']) > options.postSizeLimit) {
+      res.status(413).send({ error: 'payload too large' })
+      return
+    }
+    const body = getUploadBody(req, options.postSizeLimit)
+    if (!body) {
+      res.status(415).send({ error: 'unsupported content encoding' })
+      return
+    }
+    await fetchAndRespond('POST', req.path, req.query, req.headers, body, res, options)
   })
 }
+
+function getUploadBody(req: Request, limit: number): AsyncIterable<Buffer> | null {
+  const encoding = req.headers['content-encoding']?.toLowerCase() ?? 'identity'
+  if (encoding === 'identity') {
+    return limitSize(req, limit)
+  }
+  const createDecoder = DECODERS[encoding]
+  return createDecoder ? limitSize(pipeStreams(req, createDecoder(), ignoreError), limit) : null
+}
+
+async function* limitSize(source: AsyncIterable<Buffer>, limit: number): AsyncIterable<Buffer> {
+  let size = 0
+  for await (const chunk of source) {
+    size += chunk.byteLength
+    if (size > limit) {
+      throw PAYLOAD_TOO_LARGE
+    }
+    yield chunk
+  }
+}
+
+function ignoreError() {}
 
 async function fetchAndRespond(
   method: 'GET' | 'POST',
   path: string,
   query: Record<string, unknown>,
   headers: IncomingHttpHeaders,
-  body: unknown,
+  body: AsyncIterable<Buffer> | null,
   res: Response,
   options: Options,
 ) {
+  const reference = getReferenceSegment(path)
+  if (reference !== undefined && !isCanonicalReference(reference)) {
+    res.status(400).send({ error: 'bad reference' })
+    return
+  }
+
   if (options.removePinHeader) {
     delete headers[SWARM_PIN_HEADER]
   }
@@ -96,6 +229,7 @@ async function fetchAndRespond(
   const postageToken = headers[POSTAGE_TOKEN_HEADER]
   delete headers[POSTAGE_TOKEN_HEADER]
 
+  let response: globalThis.Response | null = null
   try {
     if (method === 'POST' && !headers[SWARM_PRESIGNED_HEADER]) {
       if (options.postageBatchDispenser.enabled) {
@@ -114,56 +248,32 @@ async function fetchAndRespond(
         headers[SWARM_STAMP_HEADER] = options.stampManager.getPostageStamp(path.startsWith('/soc/'))
       }
     }
-    if (body && Buffer.isBuffer(body)) {
-      body = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength)
-    }
-    let response = await axios({
+    const queryString = Objects.toQueryString(query, true)
+    const init: RequestInit = {
       method,
-      url: Strings.joinUrl([options.beeApiUrl, path]) + Objects.toQueryString(query, true),
-      data: body,
-      headers,
-      timeout: Dates.minutes(20),
-      validateStatus: status => status < 500,
-      responseType: 'arraybuffer',
-      maxRedirects: 0,
-    })
+      headers: toBeeHeaders(headers),
+      body,
+      duplex: 'half',
+      redirect: 'manual',
+    }
+    response = await fetchBee(Strings.joinUrl([options.beeApiUrl, path]) + queryString, init)
 
-    if (response.status === 404 || (response.status >= 300 && response.status < 400)) {
-      const uglyUrls = [Strings.joinUrl([options.beeApiUrl, path, 'index.html']) + Objects.toQueryString(query, true)]
+    if (method === 'GET' && (response.status === 404 || (response.status >= 300 && response.status < 400))) {
+      const uglyUrls = [Strings.joinUrl([options.beeApiUrl, path, 'index.html']) + queryString]
       if (!path.endsWith('/')) {
-        uglyUrls.push(Strings.joinUrl([options.beeApiUrl, path]) + '.html' + Objects.toQueryString(query, true))
+        uglyUrls.push(Strings.joinUrl([options.beeApiUrl, path]) + '.html' + queryString)
       }
       for (const uglyUrl of uglyUrls) {
-        const probeResponse = await axios({
-          method,
-          url: uglyUrl,
-          data: body,
-          headers,
-          timeout: Dates.minutes(20),
-          validateStatus: status => status < 500,
-          responseType: 'arraybuffer',
-          maxRedirects: 0,
-        })
+        const probeResponse = await fetchBee(uglyUrl, init)
 
-        if (probeResponse.status >= 200 && probeResponse.status < 300) {
+        if (probeResponse.ok) {
+          discard(response)
           response = probeResponse
+        } else {
+          discard(probeResponse)
         }
       }
     }
-
-    if (response.status === 404) {
-      const sliceFn = Objects.getDeep(response.data, 'slice')
-      if (Types.isFunction(sliceFn)) {
-        const text = (sliceFn.call(response.data, 0, 100) as Buffer).toString('utf8')
-        if (text.includes('address not found or incorrect')) {
-          res.status(404).contentType('text/html').send(getNotFoundPage())
-          return
-        }
-      }
-    }
-
-    let isHtml = false
-    let typeLabel: string | null = null
 
     const typeHints = await Cache.get<TypeHintsRow[]>('typeHints', Dates.minutes(1), async () => {
       try {
@@ -175,32 +285,38 @@ async function fetchAndRespond(
       }
     })
 
-    const sliceFn = Objects.getDeep(response.data, 'slice')
-    if (Types.isFunction(sliceFn)) {
-      const beginning = (sliceFn.call(response.data, 0, 50) as Buffer).toString('utf8')
-      isHtml = beginning.toLowerCase().includes('<!doctype html')
+    const isUpload = method === 'POST' && (path === '/bytes' || path === '/bzz') && response.ok
+    let headLength = isUpload ? Infinity : NOT_FOUND_PEEK_LENGTH
+    for (const typeHint of typeHints) {
+      headLength = Math.max(headLength, typeHint.byteStart + typeHint.byteLength)
+    }
+    const head = response.body ? await readHead(response.body, headLength) : EMPTY_HEAD
 
-      const matchingTypeHint = typeHints.find(typeHint => {
-        const actualHash = Binary.keccak256(sliceFn.call(response.data, typeHint.byteStart, typeHint.byteLength))
-        const expectedHash = Binary.hexToUint8Array(typeHint.hash)
-        return Binary.equals(actualHash, expectedHash)
-      })
+    if (response.status === 404 && head.toString('utf8', 0, NOT_FOUND_PEEK_LENGTH).includes(NOT_FOUND_MESSAGE)) {
+      res.status(404).contentType('text/html').send(getNotFoundPage())
+      return
+    }
 
-      if (matchingTypeHint) {
-        typeLabel = matchingTypeHint.label
-      }
+    let isHtml = head.toString('utf8', 0, HTML_PEEK_LENGTH).toLowerCase().includes('<!doctype html')
+    let typeLabel: string | null = null
+
+    const matchingTypeHint = typeHints.find(typeHint => {
+      const actualHash = Binary.keccak256(head.subarray(typeHint.byteStart, typeHint.byteStart + typeHint.byteLength))
+      const expectedHash = Binary.hexToUint8Array(typeHint.hash)
+      return Binary.equals(actualHash, expectedHash)
+    })
+
+    if (matchingTypeHint) {
+      typeLabel = matchingTypeHint.label
     }
 
     if (!isHtml) {
-      if (response.headers['content-type'] === 'text/html') {
+      const contentType = (response.headers.get('content-type') ?? '').toLowerCase()
+      if (contentType.startsWith('text/html') || contentType.startsWith('application/xhtml+xml')) {
         isHtml = true
-      } else if ((response.headers['content-disposition'] || '').toLowerCase().includes('.htm')) {
+      } else if ((response.headers.get('content-disposition') ?? '').toLowerCase().includes('.htm')) {
         isHtml = true
       }
-    }
-
-    if (isHtml) {
-      response.headers['content-type'] = 'text/html'
     }
 
     const settings = await Cache.get<SettingsRow>('settings', Dates.minutes(1), async () => {
@@ -211,7 +327,7 @@ async function fetchAndRespond(
       return row || DEFAULT_SETTINGS
     })
 
-    const isEns = path.includes('.eth')
+    const isEns = reference !== undefined && ENS_NAME.test(reference)
 
     let allowed = typeLabel
       ? true
@@ -237,10 +353,22 @@ async function fetchAndRespond(
       allowed = true
     }
 
-    const currentCid = Strings.searchSubstring(path, x => x.length > 48 && x.startsWith('bah'))
-    const currentHash = Strings.searchHex(path, 64)
-    const hash = currentCid || currentHash
-    const rule = hash ? await Rules.getOneOrNull({ hash }).catch(() => null) : null
+    const hash = getRuleHash(reference ?? path)
+    const hashes: string[] = []
+    if (hash) {
+      addRuleHashes(hashes, hash)
+    }
+    if (isEns) {
+      for (const ensHash of await resolveEnsReferences(options.beeApiUrl, reference)) {
+        addRuleHashes(hashes, ensHash)
+      }
+    }
+    const rule = hashes.length
+      ? ((await getOnlyRowOrNull(
+          `SELECT hash, mode FROM rules WHERE hash IN (?) ORDER BY mode = 'deny' DESC LIMIT 1`,
+          hashes,
+        ).catch(() => null)) as Pick<RulesRow, 'hash' | 'mode'> | null)
+      : null
 
     if (rule) {
       if (rule.mode === 'deny') {
@@ -251,22 +379,18 @@ async function fetchAndRespond(
     }
 
     if (!allowed) {
-      if (hash) {
-        res.redirect(`${settings.redirectUri}/forbidden?hash=${hash}`)
+      const forbiddenHash = rule?.hash ?? hash
+      if (forbiddenHash) {
+        res.redirect(`${settings.redirectUri}/forbidden?hash=${forbiddenHash}`)
       } else {
         res.redirect(`${settings.redirectUri}/forbidden`)
       }
       return
     }
 
-    if (
-      method === 'POST' &&
-      (path === '/bytes' || path === '/bzz') &&
-      response.status >= 200 &&
-      response.status < 300
-    ) {
+    if (isUpload) {
       try {
-        const json = JSON.parse(Buffer.from(response.data).toString('utf8'))
+        const json = JSON.parse(head.toString('utf8'))
         if (json.reference) {
           logger.info('upload', { path, reference: json.reference })
         }
@@ -275,17 +399,107 @@ async function fetchAndRespond(
       }
     }
 
-    delete response.headers['content-length']
-    delete response.headers['content-encoding']
-    delete response.headers['transfer-encoding']
-    delete response.headers.connection
-    delete response.headers.etag
-    delete response.headers['last-modified']
-    delete response.headers['cache-control']
-
-    res.set(response.headers).status(response.status).send(response.data)
+    for (const [key, value] of response.headers) {
+      if (CORS_LIST_HEADERS.has(key)) {
+        res.set(key, mergeLists(res.get(key), value))
+      } else if (!UNFORWARDED_RESPONSE_HEADERS.has(key)) {
+        res.set(key, value)
+      }
+    }
+    const contentLength = response.headers.get('content-length')
+    if (contentLength && !response.headers.has('content-encoding')) {
+      res.set('content-length', contentLength)
+    }
+    if (isHtml) {
+      res.set('content-type', 'text/html')
+    }
+    res.status(response.status)
+    if (head.byteLength) {
+      res.write(head)
+    }
+    if (response.body) {
+      await pipeline(Readable.fromWeb(response.body), res)
+    } else {
+      res.end()
+    }
   } catch (error) {
-    logger.error('proxy failed', error)
-    res.sendStatus(500)
+    if (res.headersSent || res.destroyed) {
+      logger.debug('proxy stream interrupted', error)
+      res.destroy()
+    } else if (error instanceof Error && error.cause === PAYLOAD_TOO_LARGE) {
+      res.status(413).send({ error: 'payload too large' })
+    } else {
+      logger.error('proxy failed', error)
+      res.sendStatus(500)
+    }
+  } finally {
+    if (response) {
+      discard(response)
+    }
+  }
+}
+
+function mergeLists(current: string | undefined, addition: string): string {
+  if (!current) {
+    return addition
+  }
+  const existing = current
+    .toLowerCase()
+    .split(',')
+    .map(x => x.trim())
+  let merged = current
+  for (const item of addition.split(',')) {
+    const trimmed = item.trim()
+    const lowercase = trimmed.toLowerCase()
+    if (trimmed && !existing.includes(lowercase)) {
+      existing.push(lowercase)
+      merged += `, ${trimmed}`
+    }
+  }
+  return merged
+}
+
+function toBeeHeaders(headers: IncomingHttpHeaders): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const key in headers) {
+    const value = headers[key]
+    if (value !== undefined && !UNFORWARDED_REQUEST_HEADERS.has(key)) {
+      result[key] = Array.isArray(value) ? value.join(', ') : value
+    }
+  }
+  return result
+}
+
+async function fetchBee(url: string, init: RequestInit): Promise<globalThis.Response> {
+  const response = await fetch(url, init)
+  if (response.status >= 500) {
+    discard(response)
+    throw Error(`bee responded with ${response.status} for ${url}`)
+  }
+  return response
+}
+
+async function readHead(body: ReadableStream<Uint8Array>, length: number): Promise<Buffer> {
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (total < length) {
+      const chunk = await reader.read()
+      if (chunk.done) {
+        break
+      }
+      chunks.push(chunk.value)
+      total += chunk.value.byteLength
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  return Buffer.concat(chunks, total)
+}
+
+function discard(response: globalThis.Response) {
+  if (response.body && !response.body.locked) {
+    response.body.cancel().catch(() => {})
   }
 }
