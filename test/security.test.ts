@@ -73,11 +73,7 @@ async function startGateway(
     postageKeepAlive: false,
   })
   await stampManager.start()
-  const app = createApp(
-    { beeApiUrl, hostname: 'gw.local', removePinHeader: true, ...config },
-    stampManager,
-    dispenser,
-  )
+  const app = createApp({ beeApiUrl, hostname: 'gw.local', removePinHeader: true, ...config }, stampManager, dispenser)
   return listen(http.createServer(app))
 }
 
