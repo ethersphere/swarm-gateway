@@ -38,11 +38,17 @@ jobs:
             - name: Expect 200 for exact hostname
               run: npx npxie code-equals "http://localhost:3000/tls-check?domain=bzz.limo" 200
 
-            - name: Expect 200 for single subdomain
-              run: npx npxie code-equals "http://localhost:3000/tls-check?domain=swarm.bzz.limo" 200
+            - name: Expect 200 for reference subdomain
+              run: npx npxie code-equals "http://localhost:3000/tls-check?domain=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bzz.limo" 200
 
-            - name: Expect 200 for nested subdomain
-              run: npx npxie code-equals "http://localhost:3000/tls-check?domain=book.swarm.bzz.limo" 200
+            - name: Expect 200 for CID subdomain
+              run: npx npxie code-equals "http://localhost:3000/tls-check?domain=bah5acgzazjrvpieogf6rl3cwb7xtjzgykw6eyvkd2rhybrb4i3amjmsbllxa.bzz.limo" 200
+
+            - name: Expect 403 for unresolvable ENS subdomain
+              run: npx npxie code-equals "http://localhost:3000/tls-check?domain=www.mail.example.bzz.limo" 403
+
+            - name: Expect 403 for look-alike domain
+              run: npx npxie code-equals "http://localhost:3000/tls-check?domain=bzz.limo.evil.com" 403
 
             - name: Expect 403 for unrelated domain
               run: npx npxie code-equals "http://localhost:3000/tls-check?domain=evil.com" 403

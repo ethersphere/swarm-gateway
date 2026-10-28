@@ -12,6 +12,7 @@ import { AppConfig } from '../src/config'
 import * as Database from '../src/database/Database'
 import { createApp } from '../src/server'
 import * as Feed from '../src/services/feed'
+import { PostageBatchDispenserService } from '../src/services/postage-batch-dispenser'
 import { StampManager } from '../src/stamp'
 
 const STAMP = 'aa'.repeat(32)
@@ -148,6 +149,7 @@ async function startGateway(config: Partial<AppConfig> = {}): Promise<number> {
   const app = createApp(
     { beeApiUrl, hostname: 'gw.local', removePinHeader: true, moderationSecret: 'moderator', ...config },
     stampManager,
+    new PostageBatchDispenserService({ url: '', secret: '' }),
   )
   return listen(http.createServer(app))
 }

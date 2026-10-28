@@ -13,6 +13,7 @@ import { logger } from '../src/logger'
 import { addRuleHashes, getReferenceSegment, getRuleHash } from '../src/proxy'
 import { createApp } from '../src/server'
 import * as Feed from '../src/services/feed'
+import { PostageBatchDispenserService } from '../src/services/postage-batch-dispenser'
 import { StampManager } from '../src/stamp'
 
 const HASH = 'cd'.repeat(32)
@@ -67,7 +68,11 @@ async function startGateway(config: Partial<AppConfig> = {}): Promise<number> {
     postageKeepAlive: false,
   })
   await stampManager.start()
-  const app = createApp({ beeApiUrl, hostname: 'gw.local', removePinHeader: true, ...config }, stampManager)
+  const app = createApp(
+    { beeApiUrl, hostname: 'gw.local', removePinHeader: true, ...config },
+    stampManager,
+    new PostageBatchDispenserService({ url: '', secret: '' }),
+  )
   return listen(http.createServer(app))
 }
 

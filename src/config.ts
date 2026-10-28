@@ -34,6 +34,11 @@ export interface StampConfig {
   postageKeepAlive: boolean
 }
 
+export interface PostageBatchDispenserConfig {
+  url: string
+  secret: string
+}
+
 export type EnvironmentVariables = Partial<{
   // Logging
   LOG_LEVEL: string
@@ -62,6 +67,10 @@ export type EnvironmentVariables = Partial<{
   POSTAGE_THRESHOLD_USAGE: string
   POSTAGE_THRESHOLD_SECONDS: string
   POSTAGE_KEEP_ALIVE: string
+
+  // Postage batch dispenser
+  POSTAGE_DISPENSER_URL: string
+  POSTAGE_DISPENSER_SECRET: string
 
   // Homepage
   HOMEPAGE: string
@@ -114,5 +123,12 @@ export function getStampConfig(env: EnvironmentVariables): StampConfig {
       Types.asNullable(Types.asNumber, env.POSTAGE_THRESHOLD_SECONDS) || Duration.fromHours(1).toSeconds(),
     postageThresholdUsage: Types.asNullable(Types.asNumber, env.POSTAGE_THRESHOLD_USAGE) || 0.85,
     postageKeepAlive: env.POSTAGE_KEEP_ALIVE ? env.POSTAGE_KEEP_ALIVE === 'true' : false,
+  }
+}
+
+export function getPostageBatchDispenserConfig(env: EnvironmentVariables): PostageBatchDispenserConfig {
+  return {
+    url: env.POSTAGE_DISPENSER_URL || '',
+    secret: env.POSTAGE_DISPENSER_SECRET || '',
   }
 }

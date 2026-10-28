@@ -1,5 +1,5 @@
 import { Reference } from '@ethersphere/bee-js'
-import { Binary, Cache, Dates, Objects, Strings } from 'cafe-utility'
+import { Binary, Cache, Dates, Objects, Strings, Types } from 'cafe-utility'
 import { Application, Request, Response } from 'express'
 import { IncomingHttpHeaders } from 'http'
 import { pipeline as pipeStreams, Readable, Transform } from 'stream'
@@ -14,6 +14,7 @@ import { TypeHints, TypeHintsRow } from './database/TypeHints'
 import { logger } from './logger'
 import { getNotFoundPage } from './not-found'
 import { resolveEnsReferences } from './services/ens'
+import { POSTAGE_TOKEN_HEADER, PostageBatchDispenserService } from './services/postage-batch-dispenser'
 import { StampManager } from './stamp'
 
 export const GET_PROXY_ENDPOINTS = ['/chunks/*path', '/bytes/*path', '/bzz/*path', '/feeds/*path']
@@ -76,6 +77,7 @@ interface Options {
   removePinHeader: boolean
   instanceName?: string | undefined
   stampManager: StampManager
+  postageBatchDispenser: PostageBatchDispenserService
   hostname?: string
   postSizeLimit: number
 }
@@ -224,10 +226,27 @@ async function fetchAndRespond(
     delete headers[SWARM_PIN_HEADER]
   }
 
+  const postageToken = headers[POSTAGE_TOKEN_HEADER]
+  delete headers[POSTAGE_TOKEN_HEADER]
+
   let response: globalThis.Response | null = null
   try {
-    if (method === 'POST' && !headers[SWARM_PRESIGNED_HEADER] && options.stampManager.enabled) {
-      headers[SWARM_STAMP_HEADER] = options.stampManager.getPostageStamp(path.startsWith('/soc/'))
+    if (method === 'POST' && !headers[SWARM_PRESIGNED_HEADER]) {
+      if (options.postageBatchDispenser.enabled) {
+        delete headers[SWARM_STAMP_HEADER]
+      }
+
+      if (options.postageBatchDispenser.enabled && Types.isString(postageToken)) {
+        const batchId = await options.postageBatchDispenser.resolveToken(postageToken)
+
+        if (!batchId) {
+          res.status(401).send({ error: 'unknown or inactive postage token' })
+          return
+        }
+        headers[SWARM_STAMP_HEADER] = batchId
+      } else if (options.stampManager.enabled) {
+        headers[SWARM_STAMP_HEADER] = options.stampManager.getPostageStamp(path.startsWith('/soc/'))
+      }
     }
     const queryString = Objects.toQueryString(query, true)
     const init: RequestInit = {
