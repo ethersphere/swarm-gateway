@@ -23,15 +23,17 @@ export async function isServableSubdomain(subdomain: string, beeApiUrl: string):
   }
 }
 
-// Bee answers 400 when the name does not resolve; other statuses are about the content, not the name.
 async function resolvesOnBee(ensName: string, beeApiUrl: string): Promise<boolean> {
   const response = await fetch(Strings.joinUrl([beeApiUrl, 'bzz', ensName, '/']), {
     redirect: 'manual',
     signal: AbortSignal.timeout(Dates.seconds(10)),
   })
   await response.body?.cancel()
+  if (response.status >= 500) {
+    throw Error(`ens resolution responded with ${response.status} for ${ensName}`)
+  }
 
-  return response.status !== 400
+  return response.status < 400
 }
 
 export async function subdomainToBzz(subdomain: string): Promise<string> {
