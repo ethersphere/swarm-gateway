@@ -12,7 +12,6 @@ import {
 } from 'viem'
 import { mainnet } from 'viem/chains'
 import { namehash, normalize, packetToBytes } from 'viem/ens'
-import { resolveFeed } from './feed'
 
 const SWARM_CONTENTHASH = /^0xe40101fa011b20([0-9a-f]{64})$/i
 const UNIVERSAL_RESOLVER_ABI = parseAbi([
@@ -21,41 +20,24 @@ const UNIVERSAL_RESOLVER_ABI = parseAbi([
 const CONTENTHASH_ABI = parseAbi(['function contenthash(bytes32 node) view returns (bytes)'])
 
 interface EnsStrategy {
-  forwardsNamesToBee: boolean
   resolveReference(name: string): Promise<string | null>
 }
 
 export class EnsResolver {
+  readonly mode: string
   private readonly strategy: EnsStrategy
 
-  constructor(
-    private readonly beeApiUrl: string,
-    rpcUrl: string,
-  ) {
+  constructor(beeApiUrl: string, rpcUrl: string) {
+    this.mode = rpcUrl ? 'gateway' : 'bee'
     this.strategy = rpcUrl ? new RpcStrategy(rpcUrl) : new BeeStrategy(beeApiUrl)
-  }
-
-  get mode(): string {
-    return this.strategy.forwardsNamesToBee ? 'bee' : 'gateway'
-  }
-
-  get forwardsNamesToBee(): boolean {
-    return this.strategy.forwardsNamesToBee
   }
 
   async resolveReference(name: string): Promise<string | null> {
     return Cache.get(`ens:${name.toLowerCase()}`, Dates.minutes(1), () => this.strategy.resolveReference(name))
   }
-
-  async resolveRuleReferences(reference: string): Promise<string[]> {
-    const feed = await resolveFeed(this.beeApiUrl, reference)
-    return feed?.reference ? [reference, feed.reference] : [reference]
-  }
 }
 
 class BeeStrategy implements EnsStrategy {
-  readonly forwardsNamesToBee = true
-
   constructor(private readonly beeApiUrl: string) {}
 
   async resolveReference(name: string): Promise<string | null> {
@@ -76,7 +58,6 @@ class BeeStrategy implements EnsStrategy {
 }
 
 class RpcStrategy implements EnsStrategy {
-  readonly forwardsNamesToBee = false
   private readonly client: PublicClient
 
   constructor(rpcUrl: string) {

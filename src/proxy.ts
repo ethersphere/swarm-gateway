@@ -14,6 +14,7 @@ import { TypeHints, TypeHintsRow } from './database/TypeHints'
 import { logger } from './logger'
 import { getNotFoundPage } from './not-found'
 import { EnsResolver } from './services/ens'
+import { resolveFeed } from './services/feed'
 import { POSTAGE_TOKEN_HEADER, PostageBatchDispenserService } from './services/postage-batch-dispenser'
 import { StampManager } from './stamp'
 
@@ -244,9 +245,7 @@ async function fetchAndRespond(
       res.status(404).contentType('text/html').send(getNotFoundPage())
       return
     }
-    if (!options.ensResolver.forwardsNamesToBee) {
-      beePath = path.replace(reference, ensReference)
-    }
+    beePath = path.replace(reference, ensReference)
   }
 
   let response: globalThis.Response | null = null
@@ -370,14 +369,15 @@ async function fetchAndRespond(
       allowed = true
     }
 
-    const hash = getRuleHash(reference ?? path)
+    const hash = ensReference ?? getRuleHash(reference ?? path)
     const hashes: string[] = []
     if (hash) {
       addRuleHashes(hashes, hash)
     }
     if (ensReference) {
-      for (const ensHash of await options.ensResolver.resolveRuleReferences(ensReference)) {
-        addRuleHashes(hashes, ensHash)
+      const feed = await resolveFeed(options.beeApiUrl, ensReference)
+      if (feed?.reference) {
+        addRuleHashes(hashes, feed.reference)
       }
     }
     const rule = hashes.length

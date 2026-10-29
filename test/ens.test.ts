@@ -28,6 +28,7 @@ const CONTENTHASHES: Record<string, string> = {
   'ipfs.eth': IPFS_CONTENTHASH,
   'flip.eth': `0xe40101fa011b20${DENIED}`,
   'offchain.eth': '0x',
+  [`${SITE}.borrow.eth`]: `0xe40101fa011b20${NESTED}`,
 }
 
 const UNIVERSAL_RESOLVER_ABI = parseAbi([
@@ -44,7 +45,8 @@ const servers: Server[] = []
 const bee = http.createServer((req, res) => {
   beeRequests.push(req.url ?? '')
   req.resume()
-  res.writeHead(200, { 'content-type': 'application/json' })
+  const etag = req.url === '/bytes/site.eth' ? `"${SITE}"` : ''
+  res.writeHead(200, { 'content-type': 'application/json', etag })
   res.end('{}')
 })
 
@@ -206,6 +208,46 @@ describe('ens resolution by the gateway', () => {
   })
 })
 
+describe('ens approval', () => {
+  let port: number
+
+  before(async () => {
+    Cache.delete('settings')
+    mock.method(Database, 'getOnlyRowOrNull', async (query: string, ...params: unknown[]) => {
+      if (query.includes('FROM settings')) {
+        return {
+          name: 'strict',
+          defaultWebsiteRule: 'deny',
+          defaultFileRule: 'deny',
+          defaultEnsRule: 'deny',
+          redirectUri: '',
+        }
+      }
+      return Array.isArray(params[0]) && params[0].includes(SITE) ? { hash: SITE, mode: 'allow' } : null
+    })
+    mock.method(Database, 'getRows', async () => [])
+    port = await startGateway({
+      instanceName: 'strict',
+      ensRpcUrl: `http://127.0.0.1:${(rpc.address() as AddressInfo).port}`,
+    })
+  })
+
+  after(() => {
+    mock.restoreAll()
+    Cache.delete('settings')
+  })
+
+  it('serves names pointing to approved content', async () => {
+    assert.equal((await request(port, '/bzz/site.eth/')).status, 200)
+  })
+
+  it('ignores approved hashes spelled out in the name', async () => {
+    const response = await request(port, `/bzz/${SITE}.borrow.eth/`)
+    assert.equal(response.status, 302)
+    assert.equal(response.location, `/forbidden?hash=${NESTED}`)
+  })
+})
+
 describe('ens resolution with an unreachable rpc', () => {
   it('answers 502 without contacting bee', async () => {
     const port = await startGateway({ ensRpcUrl: 'http://127.0.0.1:1' })
@@ -216,10 +258,11 @@ describe('ens resolution with an unreachable rpc', () => {
 })
 
 describe('ens resolution by bee', () => {
-  it('forwards the name to bee', async () => {
+  it('forwards the reference resolved by bee instead of the name', async () => {
     const port = await startGateway({})
+    Cache.delete('ens:site.eth')
     beeRequests.length = 0
     assert.equal((await request(port, '/bzz/site.eth/')).status, 200)
-    assert.equal(beeRequests[0], '/bzz/site.eth/')
+    assert.deepEqual(beeRequests.slice(0, 2), ['/bytes/site.eth', `/bzz/${SITE}/`])
   })
 })
