@@ -15,7 +15,8 @@
     "@ethersphere/bee-js": "^13.2.0",
     "cafe-utility": "^34.0.0",
     "express": "^5.3.0",
-    "mysql2": "^3.24.6"
+    "mysql2": "^3.24.6",
+    "viem": "^2.57.13"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

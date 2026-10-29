@@ -17,6 +17,7 @@ export interface AppConfig {
   homepage?: string | undefined
   mattermostWebhookUrl?: string
   mattermostStdout?: boolean
+  ensRpcUrl?: string
 }
 
 export interface ServerConfig {
@@ -75,6 +76,9 @@ export type EnvironmentVariables = Partial<{
   // Homepage
   HOMEPAGE: string
 
+  // ENS resolution via an Ethereum mainnet JSON-RPC instead of Bee
+  ENS_RPC_URL: string
+
   MATTERMOST_WEBHOOK_URL: string
   MATTERMOST_STDOUT: string
 }>
@@ -105,6 +109,7 @@ export function getAppConfig(env: EnvironmentVariables): AppConfig {
     homepage: env.HOMEPAGE || '',
     mattermostWebhookUrl: env.MATTERMOST_WEBHOOK_URL || '',
     mattermostStdout: env.MATTERMOST_STDOUT === 'true',
+    ensRpcUrl: env.ENS_RPC_URL || '',
     readinessMode: env.READINESS_MODE === ReadinessMode.Strict ? ReadinessMode.Strict : ReadinessMode.Normal,
   }
 }

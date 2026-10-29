@@ -15,6 +15,7 @@ import { METRICS_CONTENT_TYPE, renderMetrics } from './metrics'
 import { createProxyEndpoints, hasDotSegment } from './proxy'
 import { checkReadiness } from './readiness'
 import { resolveFeed } from './services/feed'
+import { EnsResolver } from './services/ens'
 import { sendMattermostAlert } from './services/mattermost'
 import { PostageBatchDispenserService } from './services/postage-batch-dispenser'
 import { StampManager } from './stamp'
@@ -38,6 +39,7 @@ export function createApp(
   postageBatchDispenser: PostageBatchDispenserService,
 ): Application {
   const bee = new Bee(config.beeApiUrl)
+  const ensResolver = new EnsResolver(config.beeApiUrl, config.ensRpcUrl ?? '')
   const app = express()
 
   const postSizeLimit = Numbers.makeStorage(
@@ -90,7 +92,7 @@ export function createApp(
     })
   }
 
-  logger.info(`resolving .eth names and CIDs at *.${config.hostname}`)
+  logger.info(`resolving .eth names and CIDs at *.${config.hostname}, ens resolution by ${ensResolver.mode}`)
 
   app.get('/metrics', (_req, res) => {
     res.set('Content-Type', METRICS_CONTENT_TYPE)
@@ -110,8 +112,7 @@ export function createApp(
         return
       }
       const suffix = `.${config.hostname}`
-      const valid =
-        domain.endsWith(suffix) && (await isServableSubdomain(domain.slice(0, -suffix.length), config.beeApiUrl))
+      const valid = domain.endsWith(suffix) && (await isServableSubdomain(domain.slice(0, -suffix.length), ensResolver))
       res.sendStatus(valid ? 200 : 403)
     })
   }
@@ -277,6 +278,7 @@ export function createApp(
     removePinHeader: config.removePinHeader ?? true,
     stampManager,
     postageBatchDispenser,
+    ensResolver,
     hostname: config.hostname,
     instanceName: config.instanceName,
     postSizeLimit,

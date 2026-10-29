@@ -36,6 +36,9 @@ jobs:
                   export TEMPORARY=5
                   node dist > gateway.log 2>&1 < /dev/null &
 
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
+
             - name: Upload small JSON
               run: npx npxie post-json http://localhost:3000/bzz 100
 
@@ -65,6 +68,9 @@ jobs:
                   export DATABASE_CONFIG="{}"
                   export TEMPORARY=15
                   node dist > gateway.log 2>&1 < /dev/null &
+
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
 
             - name: Upload large JSON
               run: npx npxie post-json http://localhost:3000/bzz 100000000

@@ -37,5 +37,8 @@ jobs:
                   export HOMEPAGE=9461d23ca46636017661ee124bc82109edba3312bfe0510ffc7eeaa562383ec2
                   node dist > gateway.log 2>&1 < /dev/null &
 
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
+
             - name: Check image/jpeg content-type
               run: npx npxie content-type-is http://localhost:3000 "image/jpeg"

@@ -1,28 +1,101 @@
 import { Cache, Dates, Strings } from 'cafe-utility'
-import { logger } from '../logger'
-import { resolveFeed } from './feed'
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  createPublicClient,
+  encodeFunctionData,
+  decodeFunctionResult,
+  http,
+  parseAbi,
+  PublicClient,
+  toHex,
+} from 'viem'
+import { mainnet } from 'viem/chains'
+import { namehash, normalize, packetToBytes } from 'viem/ens'
 
-export async function resolveEnsReferences(beeApiUrl: string, name: string): Promise<string[]> {
-  try {
-    return await Cache.get(`ens:${name}`, Dates.minutes(1), async () => {
-      const response = await fetch(Strings.joinUrl([beeApiUrl, 'bytes', name]), {
-        headers: { Range: 'bytes=0-0' },
-        redirect: 'manual',
-        signal: AbortSignal.timeout(Dates.seconds(30)),
-      })
-      await response.body?.cancel()
-      if (!response.ok) {
-        throw Error(`ens resolution responded with ${response.status} for ${name}`)
-      }
-      const reference = Strings.searchHex(response.headers.get('etag') ?? '', 64)
-      if (!reference) {
-        throw Error(`no reference in ETag for ${name}`)
-      }
-      const feed = await resolveFeed(beeApiUrl, reference)
-      return feed?.reference ? [reference, feed.reference] : [reference]
+const SWARM_CONTENTHASH = /^0xe40101fa011b20([0-9a-f]{64})$/i
+const UNIVERSAL_RESOLVER_ABI = parseAbi([
+  'function resolveWithGateways(bytes name, bytes data, string[] gateways) view returns (bytes, address)',
+])
+const CONTENTHASH_ABI = parseAbi(['function contenthash(bytes32 node) view returns (bytes)'])
+
+interface EnsStrategy {
+  resolveReference(name: string): Promise<string | null>
+}
+
+export class EnsResolver {
+  readonly mode: string
+  private readonly strategy: EnsStrategy
+
+  constructor(beeApiUrl: string, rpcUrl: string) {
+    this.mode = rpcUrl ? 'gateway' : 'bee'
+    this.strategy = rpcUrl ? new RpcStrategy(rpcUrl) : new BeeStrategy(beeApiUrl)
+  }
+
+  async resolveReference(name: string): Promise<string | null> {
+    return Cache.get(`ens:${name.toLowerCase()}`, Dates.minutes(1), () => this.strategy.resolveReference(name))
+  }
+}
+
+class BeeStrategy implements EnsStrategy {
+  constructor(private readonly beeApiUrl: string) {}
+
+  async resolveReference(name: string): Promise<string | null> {
+    const response = await fetch(Strings.joinUrl([this.beeApiUrl, 'bytes', name]), {
+      headers: { Range: 'bytes=0-0' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(Dates.seconds(30)),
     })
-  } catch (error) {
-    logger.warn('ens resolution failed', { name, error })
-    return []
+    await response.body?.cancel()
+    if (response.status >= 500) {
+      throw Error(`ens resolution responded with ${response.status} for ${name}`)
+    }
+    if (!response.ok) {
+      return null
+    }
+    return Strings.searchHex(response.headers.get('etag') ?? '', 64)
+  }
+}
+
+class RpcStrategy implements EnsStrategy {
+  private readonly client: PublicClient
+
+  constructor(rpcUrl: string) {
+    this.client = createPublicClient({
+      chain: mainnet,
+      ccipRead: false,
+      transport: http(rpcUrl, { timeout: Dates.seconds(10) }),
+    })
+  }
+
+  async resolveReference(name: string): Promise<string | null> {
+    let normalized: string
+    try {
+      normalized = normalize(name)
+    } catch {
+      return null
+    }
+    try {
+      const [data] = await this.client.readContract({
+        address: mainnet.contracts.ensUniversalResolver.address,
+        abi: UNIVERSAL_RESOLVER_ABI,
+        functionName: 'resolveWithGateways',
+        args: [
+          toHex(packetToBytes(normalized)),
+          encodeFunctionData({ abi: CONTENTHASH_ABI, functionName: 'contenthash', args: [namehash(normalized)] }),
+          [],
+        ],
+      })
+      if (data === '0x') {
+        return null
+      }
+      const contenthash = decodeFunctionResult({ abi: CONTENTHASH_ABI, functionName: 'contenthash', data })
+      return SWARM_CONTENTHASH.exec(contenthash)?.[1]?.toLowerCase() ?? null
+    } catch (error) {
+      if (error instanceof BaseError && error.walk(x => x instanceof ContractFunctionRevertedError)) {
+        return null
+      }
+      throw error
+    }
   }
 }

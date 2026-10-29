@@ -21,11 +21,17 @@ const OTHER_HASH = 'ef'.repeat(32)
 const HOMEPAGE = 'ab'.repeat(32)
 const DENIED_HASH = '12'.repeat(32)
 const FEED_MANIFEST = '34'.repeat(32)
+const SITE_HASH = '56'.repeat(32)
+const PLAIN_HASH = '78'.repeat(32)
+const ANOTHER_HASH = '9a'.repeat(32)
 
 const ENS_RECORDS: Record<string, string> = {
   '/bytes/denied.eth': DENIED_HASH,
   '/bytes/feed.eth': FEED_MANIFEST,
   '/bytes/other.eth': OTHER_HASH,
+  '/bytes/site.eth': SITE_HASH,
+  '/bytes/plain.eth': PLAIN_HASH,
+  '/bytes/another.eth': ANOTHER_HASH,
 }
 
 const beeRequests: string[] = []
@@ -46,7 +52,7 @@ const bee = http.createServer((req, res) => {
   } else if (url.endsWith('/charset-html')) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     res.end('<html><script>alert(1)</script></html>')
-  } else if (url.includes('site')) {
+  } else if (url.includes('site') || url.includes(SITE_HASH)) {
     res.writeHead(200, { 'content-type': 'text/html' })
     res.end('<!DOCTYPE html><h1>site</h1>')
   } else {
@@ -338,8 +344,8 @@ describe('ens moderation', () => {
     assert.equal((await request(port, 'GET', '/bzz/other.eth/')).status, 200)
   })
 
-  it('falls back to the ens rule when the name does not resolve', async () => {
-    assert.equal((await request(port, 'GET', '/bzz/unknown.eth/')).status, 200)
+  it('shows the not found page when the name does not resolve', async () => {
+    assert.equal((await request(port, 'GET', '/bzz/unknown.eth/')).status, 404)
   })
 })
 
@@ -416,9 +422,9 @@ describe('subdomain rewrites', () => {
 
   it('resolves every subdomain on its own', async () => {
     const expected = [
-      ['plain', 'plain.eth'],
+      ['plain', PLAIN_HASH],
       ['rewritten', OTHER_HASH],
-      ['another', 'another.eth'],
+      ['another', ANOTHER_HASH],
     ]
     for (const [subdomain, target] of expected) {
       beeRequests.length = 0

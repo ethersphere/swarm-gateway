@@ -47,6 +47,9 @@ jobs:
                   export TEMPORARY=5
                   node dist > gateway.log 2>&1 < /dev/null &
 
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
+
             - name: Expect HTTP 302 for file
               run: npx npxie code-equals http://localhost:3000/bzz/f000000000000000000000000000000000000000000000000000000000000000 302
 
@@ -94,6 +97,9 @@ jobs:
                   export TEMPORARY=5
                   node dist > gateway.log 2>&1 < /dev/null &
 
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
+
             - name: Expect HTTP 200 for file
               run: npx npxie code-equals http://localhost:3000/bzz/f000000000000000000000000000000000000000000000000000000000000000 200
 
@@ -140,6 +146,9 @@ jobs:
                   export DATABASE_CONFIG="{\"user\":\"test_user\",\"database\":\"test_db\"}"
                   export TEMPORARY=5
                   node dist > gateway.log 2>&1 < /dev/null &
+
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
 
             - name: Expect absolute redirect URI
               run: npx npxie 3xx http://localhost:3000/bzz/1000000000000000000000000000000000000000000000000000000000000000 https://bzz.limo/forbidden?hash=1000000000000000000000000000000000000000000000000000000000000000

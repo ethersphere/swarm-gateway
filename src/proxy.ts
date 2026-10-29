@@ -13,7 +13,8 @@ import { Settings, SettingsRow, SettingsRowId } from './database/Settings'
 import { TypeHints, TypeHintsRow } from './database/TypeHints'
 import { logger } from './logger'
 import { getNotFoundPage } from './not-found'
-import { resolveEnsReferences } from './services/ens'
+import { EnsResolver } from './services/ens'
+import { resolveFeed } from './services/feed'
 import { POSTAGE_TOKEN_HEADER, PostageBatchDispenserService } from './services/postage-batch-dispenser'
 import { StampManager } from './stamp'
 
@@ -77,6 +78,7 @@ interface Options {
   instanceName?: string | undefined
   stampManager: StampManager
   postageBatchDispenser: PostageBatchDispenserService
+  ensResolver: EnsResolver
   hostname?: string
   postSizeLimit: number
 }
@@ -228,6 +230,24 @@ async function fetchAndRespond(
   const postageToken = headers[POSTAGE_TOKEN_HEADER]
   delete headers[POSTAGE_TOKEN_HEADER]
 
+  const isEns = reference !== undefined && ENS_NAME.test(reference)
+  let ensReference: string | null = null
+  let beePath = path
+  if (isEns) {
+    try {
+      ensReference = await options.ensResolver.resolveReference(reference)
+    } catch (error) {
+      logger.error('ens resolution failed', { name: reference, error })
+      res.sendStatus(502)
+      return
+    }
+    if (!ensReference) {
+      res.status(404).contentType('text/html').send(getNotFoundPage())
+      return
+    }
+    beePath = path.replace(reference, ensReference)
+  }
+
   let response: globalThis.Response | null = null
   try {
     if (method === 'POST' && options.postageBatchDispenser.enabled) {
@@ -254,12 +274,12 @@ async function fetchAndRespond(
       duplex: 'half',
       redirect: 'manual',
     }
-    response = await fetchBee(Strings.joinUrl([options.beeApiUrl, path]) + queryString, init)
+    response = await fetchBee(Strings.joinUrl([options.beeApiUrl, beePath]) + queryString, init)
 
     if (method === 'GET' && (response.status === 404 || (response.status >= 300 && response.status < 400))) {
-      const uglyUrls = [Strings.joinUrl([options.beeApiUrl, path, 'index.html']) + queryString]
-      if (!path.endsWith('/')) {
-        uglyUrls.push(Strings.joinUrl([options.beeApiUrl, path]) + '.html' + queryString)
+      const uglyUrls = [Strings.joinUrl([options.beeApiUrl, beePath, 'index.html']) + queryString]
+      if (!beePath.endsWith('/')) {
+        uglyUrls.push(Strings.joinUrl([options.beeApiUrl, beePath]) + '.html' + queryString)
       }
       for (const uglyUrl of uglyUrls) {
         const probeResponse = await fetchBee(uglyUrl, init)
@@ -325,8 +345,6 @@ async function fetchAndRespond(
       return row || DEFAULT_SETTINGS
     })
 
-    const isEns = reference !== undefined && ENS_NAME.test(reference)
-
     let allowed = typeLabel
       ? true
       : isEns
@@ -351,14 +369,15 @@ async function fetchAndRespond(
       allowed = true
     }
 
-    const hash = getRuleHash(reference ?? path)
+    const hash = ensReference ?? getRuleHash(reference ?? path)
     const hashes: string[] = []
     if (hash) {
       addRuleHashes(hashes, hash)
     }
-    if (isEns) {
-      for (const ensHash of await resolveEnsReferences(options.beeApiUrl, reference)) {
-        addRuleHashes(hashes, ensHash)
+    if (ensReference) {
+      const feed = await resolveFeed(options.beeApiUrl, ensReference)
+      if (feed?.reference) {
+        addRuleHashes(hashes, feed.reference)
       }
     }
     const rule = hashes.length

@@ -36,6 +36,9 @@ jobs:
                   export TEMPORARY=5
                   node dist > gateway.log 2>&1 < /dev/null &
 
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
+
             - name: Expect HTTP 302 for HTML
               run: npx npxie 3xx http://localhost:3000/bzz/1000000000000000000000000000000000000000000000000000000000000000 /forbidden?hash=1000000000000000000000000000000000000000000000000000000000000000
 
@@ -66,6 +69,9 @@ jobs:
                   export TEMPORARY=5
                   node dist > gateway.log 2>&1 < /dev/null &
 
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
+
             - name: Expect HTTP 200 for HTML setup with .eth
               run: npx npxie code-equals http://localhost:3000/bzz/arbitrary.eth 200
 
@@ -95,6 +101,9 @@ jobs:
                   export DATABASE_CONFIG="{}"
                   export TEMPORARY=5
                   node dist > gateway.log 2>&1 < /dev/null &
+
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
 
             - name: Expect HTTP 200 for non-HTML
               run: npx npxie code-equals http://localhost:3000/bzz/f000000000000000000000000000000000000000000000000000000000000000 200

@@ -30,5 +30,8 @@ jobs:
                   export TEMPORARY=5
                   node dist > gateway.log 2>&1 < /dev/null &
 
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
+
             - name: Check for /metrics endpoint content type
               run: npx npxie content-type-is http://localhost:3000/metrics "text/plain; version=0.0.4; charset=utf-8"
