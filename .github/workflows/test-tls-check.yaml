@@ -35,6 +35,9 @@ jobs:
                   export HOSTNAME=bzz.limo
                   node dist > gateway.log 2>&1 < /dev/null &
 
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
+
             - name: Expect 200 for exact hostname
               run: npx npxie code-equals "http://localhost:3000/tls-check?domain=bzz.limo" 200
 

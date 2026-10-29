@@ -55,6 +55,9 @@ jobs:
                   export TEMPORARY=5
                   node dist > gateway.log 2>&1 < /dev/null &
 
+            - name: Wait for gateway
+              run: npx npxie await http://localhost:3000/health
+
             - name: Expect HTTP 302 for file
               run: npx npxie code-equals http://localhost:3000/bzz/c399ab1491467143701ad8bac0f4353bf541daffbc33f86d45455ed3380b4e3b/ 302
 
