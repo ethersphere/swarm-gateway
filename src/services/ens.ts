@@ -12,11 +12,9 @@ import {
 } from 'viem'
 import { mainnet } from 'viem/chains'
 import { namehash, normalize, packetToBytes } from 'viem/ens'
-import { logger } from '../logger'
 import { resolveFeed } from './feed'
 
 const SWARM_CONTENTHASH = /^0xe40101fa011b20([0-9a-f]{64})$/i
-const LOCAL_BATCH_GATEWAY = 'x-batch-gateway:true'
 const UNIVERSAL_RESOLVER_ABI = parseAbi([
   'function resolveWithGateways(bytes name, bytes data, string[] gateways) view returns (bytes, address)',
 ])
@@ -41,26 +39,17 @@ export class EnsResolver {
     return this.strategy.forwardsNamesToBee ? 'bee' : 'gateway'
   }
 
-  async toBeePathSegment(name: string): Promise<string | null> {
-    return this.strategy.forwardsNamesToBee ? name : this.resolveReference(name)
+  get forwardsNamesToBee(): boolean {
+    return this.strategy.forwardsNamesToBee
   }
 
   async resolveReference(name: string): Promise<string | null> {
     return Cache.get(`ens:${name.toLowerCase()}`, Dates.minutes(1), () => this.strategy.resolveReference(name))
   }
 
-  async resolveRuleReferences(name: string): Promise<string[]> {
-    try {
-      const reference = await this.resolveReference(name)
-      if (!reference) {
-        return []
-      }
-      const feed = await resolveFeed(this.beeApiUrl, reference)
-      return feed?.reference ? [reference, feed.reference] : [reference]
-    } catch (error) {
-      logger.warn('ens resolution failed', { name, error })
-      return []
-    }
+  async resolveRuleReferences(reference: string): Promise<string[]> {
+    const feed = await resolveFeed(this.beeApiUrl, reference)
+    return feed?.reference ? [reference, feed.reference] : [reference]
   }
 }
 
@@ -91,7 +80,11 @@ class RpcStrategy implements EnsStrategy {
   private readonly client: PublicClient
 
   constructor(rpcUrl: string) {
-    this.client = createPublicClient({ chain: mainnet, transport: http(rpcUrl, { timeout: Dates.seconds(10) }) })
+    this.client = createPublicClient({
+      chain: mainnet,
+      ccipRead: false,
+      transport: http(rpcUrl, { timeout: Dates.seconds(10) }),
+    })
   }
 
   async resolveReference(name: string): Promise<string | null> {
@@ -109,7 +102,7 @@ class RpcStrategy implements EnsStrategy {
         args: [
           toHex(packetToBytes(normalized)),
           encodeFunctionData({ abi: CONTENTHASH_ABI, functionName: 'contenthash', args: [namehash(normalized)] }),
-          [LOCAL_BATCH_GATEWAY],
+          [],
         ],
       })
       if (data === '0x') {

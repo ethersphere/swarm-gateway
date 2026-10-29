@@ -229,21 +229,24 @@ async function fetchAndRespond(
   const postageToken = headers[POSTAGE_TOKEN_HEADER]
   delete headers[POSTAGE_TOKEN_HEADER]
 
+  const isEns = reference !== undefined && ENS_NAME.test(reference)
+  let ensReference: string | null = null
   let beePath = path
-  if (reference !== undefined && ENS_NAME.test(reference)) {
-    let segment: string | null
+  if (isEns) {
     try {
-      segment = await options.ensResolver.toBeePathSegment(reference)
+      ensReference = await options.ensResolver.resolveReference(reference)
     } catch (error) {
       logger.error('ens resolution failed', { name: reference, error })
       res.sendStatus(502)
       return
     }
-    if (!segment) {
+    if (!ensReference) {
       res.status(404).contentType('text/html').send(getNotFoundPage())
       return
     }
-    beePath = path.replace(REFERENCE_SEGMENT, match => match.slice(0, -reference.length) + segment)
+    if (!options.ensResolver.forwardsNamesToBee) {
+      beePath = path.replace(reference, ensReference)
+    }
   }
 
   let response: globalThis.Response | null = null
@@ -343,8 +346,6 @@ async function fetchAndRespond(
       return row || DEFAULT_SETTINGS
     })
 
-    const isEns = reference !== undefined && ENS_NAME.test(reference)
-
     let allowed = typeLabel
       ? true
       : isEns
@@ -374,8 +375,8 @@ async function fetchAndRespond(
     if (hash) {
       addRuleHashes(hashes, hash)
     }
-    if (isEns) {
-      for (const ensHash of await options.ensResolver.resolveRuleReferences(reference)) {
+    if (ensReference) {
+      for (const ensHash of await options.ensResolver.resolveRuleReferences(ensReference)) {
         addRuleHashes(hashes, ensHash)
       }
     }

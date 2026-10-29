@@ -5,7 +5,9 @@ import assert from 'node:assert/strict'
 import http, { Server } from 'node:http'
 import { AddressInfo } from 'node:net'
 import { after, before, describe, it, mock } from 'node:test'
+import { Cache } from 'cafe-utility'
 import { encodeAbiParameters, encodeErrorResult, encodeFunctionResult, parseAbi, toHex } from 'viem'
+import { mainnet } from 'viem/chains'
 import { packetToBytes } from 'viem/ens'
 import { AppConfig } from '../src/config'
 import * as Database from '../src/database/Database'
@@ -24,14 +26,19 @@ const CONTENTHASHES: Record<string, string> = {
   'book.swarm.eth': `0xe40101fa011b20${NESTED}`,
   'denied.eth': `0xe40101fa011b20${DENIED}`,
   'ipfs.eth': IPFS_CONTENTHASH,
+  'flip.eth': `0xe40101fa011b20${DENIED}`,
+  'offchain.eth': '0x',
 }
 
 const UNIVERSAL_RESOLVER_ABI = parseAbi([
   'function resolveWithGateways(bytes name, bytes data, string[] gateways) view returns (bytes, address)',
   'error ResolverNotFound(bytes name)',
+  'error OffchainLookup(address sender, string[] urls, bytes callData, bytes4 callbackFunction, bytes extraData)',
 ])
 
 const beeRequests: string[] = []
+const ccipRequests: string[] = []
+let flipResolutions = 0
 const servers: Server[] = []
 
 const bee = http.createServer((req, res) => {
@@ -40,6 +47,16 @@ const bee = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': 'application/json' })
   res.end('{}')
 })
+
+const ccip = http.createServer((req, res) => {
+  ccipRequests.push(req.url ?? '')
+  req.resume()
+  res.end('0x')
+})
+
+function revert(res: http.ServerResponse, id: unknown, data: string) {
+  res.end(JSON.stringify({ jsonrpc: '2.0', id, error: { code: 3, message: 'execution reverted', data } }))
+}
 
 const rpc = http.createServer(async (req, res) => {
   let body = ''
@@ -50,9 +67,14 @@ const rpc = http.createServer(async (req, res) => {
   const calldata: string = params[0].data
   const name = Object.keys(CONTENTHASHES).find(x => calldata.includes(toHex(packetToBytes(x)).slice(2)))
   res.writeHead(200, { 'content-type': 'application/json' })
-  if (!name) {
-    const data = encodeErrorResult({ abi: UNIVERSAL_RESOLVER_ABI, errorName: 'ResolverNotFound', args: ['0x'] })
-    res.end(JSON.stringify({ jsonrpc: '2.0', id, error: { code: 3, message: 'execution reverted', data } }))
+  if (name === 'offchain.eth') {
+    const url = `http://127.0.0.1:${(ccip.address() as AddressInfo).port}/`
+    const args = [mainnet.contracts.ensUniversalResolver.address, [url], '0x', '0x00000000', '0x'] as const
+    revert(res, id, encodeErrorResult({ abi: UNIVERSAL_RESOLVER_ABI, errorName: 'OffchainLookup', args }))
+    return
+  }
+  if (!name || (name === 'flip.eth' && flipResolutions++)) {
+    revert(res, id, encodeErrorResult({ abi: UNIVERSAL_RESOLVER_ABI, errorName: 'ResolverNotFound', args: ['0x'] }))
     return
   }
   const contenthash = encodeAbiParameters([{ type: 'bytes' }], [CONTENTHASHES[name] as `0x${string}`])
@@ -105,6 +127,7 @@ function request(
 before(async () => {
   await listen(bee)
   await listen(rpc)
+  await listen(ccip)
 })
 
 after(() => {
@@ -156,6 +179,25 @@ describe('ens resolution by the gateway', () => {
     const response = await request(port, '/bzz/denied.eth/')
     assert.equal(response.status, 302)
     assert.equal(response.location, `/forbidden?hash=${DENIED}`)
+  })
+
+  it('never contacts offchain lookup urls chosen by a resolver', async () => {
+    beeRequests.length = 0
+    assert.equal((await request(port, '/bzz/offchain.eth/')).status, 404)
+    assert.equal((await request(port, '/tls-check?domain=offchain.gw.local')).status, 403)
+    assert.deepEqual(ccipRequests, [])
+    assert.deepEqual(beeRequests, [])
+  })
+
+  it('checks rules against the reference that was served even if the name changes meanwhile', async () => {
+    const cacheGet = mock.method(Cache, 'get', (_key: string, _ttl: number, fn: () => Promise<unknown>) => fn())
+    try {
+      const response = await request(port, '/bzz/flip.eth/')
+      assert.equal(response.status, 302)
+      assert.equal(response.location, `/forbidden?hash=${DENIED}`)
+    } finally {
+      cacheGet.mock.restore()
+    }
   })
 
   it('allows tls only for resolvable names', async () => {

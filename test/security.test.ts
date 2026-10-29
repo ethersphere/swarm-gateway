@@ -26,6 +26,9 @@ const ENS_RECORDS: Record<string, string> = {
   '/bytes/denied.eth': DENIED_HASH,
   '/bytes/feed.eth': FEED_MANIFEST,
   '/bytes/other.eth': OTHER_HASH,
+  '/bytes/site.eth': OTHER_HASH,
+  '/bytes/plain.eth': OTHER_HASH,
+  '/bytes/another.eth': OTHER_HASH,
 }
 
 const beeRequests: string[] = []
@@ -338,8 +341,8 @@ describe('ens moderation', () => {
     assert.equal((await request(port, 'GET', '/bzz/other.eth/')).status, 200)
   })
 
-  it('falls back to the ens rule when the name does not resolve', async () => {
-    assert.equal((await request(port, 'GET', '/bzz/unknown.eth/')).status, 200)
+  it('shows the not found page when the name does not resolve', async () => {
+    assert.equal((await request(port, 'GET', '/bzz/unknown.eth/')).status, 404)
   })
 })
 
